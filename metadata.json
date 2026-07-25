@@ -1,0 +1,8 @@
+{
+  "name": "Remix: OmniPost Automation Hub",
+  "description": "A cross-platform social publishing API and dashboard utilizing headless browser automation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

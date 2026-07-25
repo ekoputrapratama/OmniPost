@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile representation in the system.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "User's email address",
+          "maxLength": 256
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account creation timestamp"
+        }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "ConnectedAccount": {
+      "title": "ConnectedAccount",
+      "description": "Encrypted credentials or sessions for browser automation on social media.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Reference to the owner user profile ID",
+          "maxLength": 128
+        },
+        "platform": {
+          "type": "string",
+          "description": "The target social media platform name",
+          "maxLength": 50
+        },
+        "method": {
+          "type": "string",
+          "description": "Connection mechanism (credentials, session_cookie, or desktop_app)",
+          "maxLength": 50
+        },
+        "encryptedData": {
+          "type": "string",
+          "description": "AES Encrypted login or session JSON payload string",
+          "maxLength": 10000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the connection was established",
+          "maxLength": 100
+        }
+      },
+      "required": ["userId", "platform", "method", "encryptedData", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A scheduled or dispatched post payload to automate via browser engine.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier for the post record",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the user profile ID of the publisher",
+          "maxLength": 128
+        },
+        "content": {
+          "type": "string",
+          "description": "The main text body to publish",
+          "maxLength": 5000
+        },
+        "platforms": {
+          "type": "array",
+          "description": "Target social networks (e.g., Twitter, LinkedIn)"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current dispatch lifecycle phase",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Submission timestamp",
+          "maxLength": 100
+        },
+        "mediaUrls": {
+          "type": "array",
+          "description": "Resolved public media assets"
+        },
+        "scheduledFor": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional future target dispatch timestamp",
+          "maxLength": 100
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Successful publication completion timestamp",
+          "maxLength": 100
+        },
+        "error": {
+          "type": "string",
+          "description": "Relevant failure logs or exceptions",
+          "maxLength": 1000
+        }
+      },
+      "required": ["id", "userId", "content", "platforms", "status", "createdAt", "mediaUrls"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles."
+    },
+    "/connectedAccounts/{accountId}": {
+      "schema": "ConnectedAccount",
+      "description": "Secure collection of connected accounts holding encrypted details."
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Collection of automated, pending, and scheduled posts."
+    }
+  }
+}

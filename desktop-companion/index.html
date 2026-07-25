@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Omnipost Companion</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+    }
+    .container {
+      max-width: 400px;
+      padding: 2rem;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+    }
+    h1 { margin-top: 0; color: #22d3ee; }
+    p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
+    .pulse {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #22d3ee;
+      box-shadow: 0 0 0 0 rgba(34, 211, 238, 1);
+      margin-bottom: 10px;
+      animation: pulse-cyan 2s infinite;
+    }
+    @keyframes pulse-cyan {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+    }
+    .app-meta {
+      font-family: monospace;
+      font-size: 11px;
+      color: #475569;
+      margin-bottom: 24px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="pulse"></div>
+    <h1>Omnipost Companion</h1>
+    <div class="app-meta" id="app-info">Loading app info...</div>
+    <p>Waiting for deep link...</p>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">Please click "Launch Companion App" from the Omnipost web dashboard to authenticate your accounts securely.</p>
+  </div>
+  
+  <script>
+    if (window.electronAPI && window.electronAPI.getAppInfo) {
+      window.electronAPI.getAppInfo().then(info => {
+        document.getElementById('app-info').innerText = `${info.name} v${info.version}`;
+      }).catch(err => {
+        document.getElementById('app-info').innerText = 'omnipost-companion';
+      });
+    }
+  </script>
+</body>
+</html>
