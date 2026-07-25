@@ -1,5 +1,7 @@
 # OmniPost Automation Hub (Experimental)
 
+**Demo URL:** [https://omnipost-hub.ai.studio](https://omnipost-hub.ai.studio)
+
 OmniPost Automation Hub is a modern, high-performance, full-stack cross-platform social publishing dashboard and API. Designed to eliminate manual repetition across social platforms, OmniPost enables creators, marketers, and developers to draft content once, select target platforms, and seamlessly dispatch or schedule posts. It powers publishes through headless browser automation (Puppeteer) and handles reliable post delivery with robust state tracking.
 
 ## Notice
