@@ -748,7 +748,13 @@ export default function App() {
                       
                       <div className="mt-6 pt-4 border-t border-white/5 w-full text-center">
                         <p className="text-[9px] text-slate-500 mb-2 font-mono uppercase tracking-widest">Don't have the companion app?</p>
-                        <a href="#" className="text-[10px] text-cyan-500/70 hover:text-cyan-400 underline decoration-cyan-500/30">Download for Mac & Windows</a>
+                        <div className="flex flex-col gap-1.5 items-center justify-center">
+                          <a href="#" className="text-[10px] text-cyan-500/70 hover:text-cyan-400 underline decoration-cyan-500/30">Download Desktop (Mac & Windows)</a>
+                          <span className="text-[9px] text-slate-600 font-mono uppercase">Or compile our Expo mobile project:</span>
+                          <div className="flex gap-4">
+                            <span className="text-[10px] text-cyan-500/70 font-mono">/mobile-companion-expo</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

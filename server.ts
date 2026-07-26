@@ -16,7 +16,7 @@ const PORT = 3000;
 // Initialize Firebase Web SDK on Server
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
 const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -147,7 +147,7 @@ async function checkScheduledPosts() {
   try {
     const now = new Date().toISOString();
     
-    // Query posts with status == 'scheduled'
+    // Query posts with status == 'scheduled' using Web SDK
     const postsRef = collection(db, "posts");
     const q = query(postsRef, where("status", "==", "scheduled"));
     const snapshot = await getDocs(q);

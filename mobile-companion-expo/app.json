@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "OmniPost Companion",
+    "slug": "omnipost-companion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050608"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.omnipostcompanion"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#050608"
+      },
+      "package": "com.example.omnipostcompanion"
+    },
+    "scheme": "omnipost",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

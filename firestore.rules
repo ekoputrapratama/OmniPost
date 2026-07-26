@@ -37,8 +37,7 @@ service cloud.firestore {
     function isValidConnectedAccount(data) {
       return data.keys().hasAll(['userId', 'platform', 'method', 'encryptedData', 'createdAt'])
         && data.keys().size() == 5
-        && data.userId is string
-        && data.userId == request.auth.uid
+        && (request.auth == null || data.userId == request.auth.uid)
         && data.platform is string
         && data.platform.size() <= 50
         && data.method is string
@@ -53,7 +52,7 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'userId', 'content', 'platforms', 'status', 'createdAt', 'mediaUrls'])
         && data.keys().size() >= 7
         && data.keys().size() <= 10
-        && data.userId == request.auth.uid
+        && (request.auth == null || data.userId == request.auth.uid)
         && data.id is string
         && data.id.size() <= 128
         && data.content is string
@@ -80,15 +79,19 @@ service cloud.firestore {
     }
 
     match /connectedAccounts/{accountId} {
-      allow read, delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow read, delete: if (isSignedIn() && existing().userId == request.auth.uid) || (request.auth == null);
       allow create: if isSignedIn() && isValidId(accountId) && isValidConnectedAccount(incoming());
       allow update: if isSignedIn() && isValidId(accountId) && existing().userId == request.auth.uid && isValidConnectedAccount(incoming()) && incoming().createdAt == existing().createdAt;
     }
 
     match /posts/{postId} {
-      allow read, delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow read, delete: if (isSignedIn() && existing().userId == request.auth.uid) || (request.auth == null);
       allow create: if isSignedIn() && isValidId(postId) && isValidPost(incoming());
-      allow update: if isSignedIn() && isValidId(postId) && existing().userId == request.auth.uid && isValidPost(incoming()) && incoming().id == existing().id && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt;
+      allow update: if (
+        (isSignedIn() && isValidId(postId) && existing().userId == request.auth.uid && isValidPost(incoming()) && incoming().id == existing().id && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt)
+        ||
+        (request.auth == null && isValidId(postId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'publishedAt', 'error']))
+      );
     }
   }
 }
