@@ -80,15 +80,15 @@ service cloud.firestore {
 
     match /connectedAccounts/{accountId} {
       allow read, delete: if (isSignedIn() && existing().userId == request.auth.uid) || (request.auth == null);
-      allow create: if isSignedIn() && isValidId(accountId) && isValidConnectedAccount(incoming());
-      allow update: if isSignedIn() && isValidId(accountId) && existing().userId == request.auth.uid && isValidConnectedAccount(incoming()) && incoming().createdAt == existing().createdAt;
+      allow create: if (isSignedIn() || request.auth == null) && isValidId(accountId) && isValidConnectedAccount(incoming());
+      allow update: if (isSignedIn() || request.auth == null) && isValidId(accountId) && (request.auth == null || existing().userId == request.auth.uid) && isValidConnectedAccount(incoming()) && incoming().createdAt == existing().createdAt;
     }
 
     match /posts/{postId} {
       allow read, delete: if (isSignedIn() && existing().userId == request.auth.uid) || (request.auth == null);
-      allow create: if isSignedIn() && isValidId(postId) && isValidPost(incoming());
+      allow create: if (isSignedIn() || request.auth == null) && isValidId(postId) && isValidPost(incoming());
       allow update: if (
-        (isSignedIn() && isValidId(postId) && existing().userId == request.auth.uid && isValidPost(incoming()) && incoming().id == existing().id && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt)
+        ((isSignedIn() || request.auth == null) && isValidId(postId) && (request.auth == null || existing().userId == request.auth.uid) && isValidPost(incoming()) && incoming().id == existing().id && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt)
         ||
         (request.auth == null && isValidId(postId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'publishedAt', 'error']))
       );

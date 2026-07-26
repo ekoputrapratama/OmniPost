@@ -8,15 +8,111 @@ import CryptoJS from "crypto-js";
 import fs from "fs";
 import os from "os";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDocs, query, where } from "firebase/firestore";
+import { 
+  getFirestore, 
+  collection as fsCollection, 
+  doc as fsDoc, 
+  setDoc as fsSetDoc, 
+  getDocs as fsGetDocs, 
+  query as fsQuery, 
+  where as fsWhere 
+} from "firebase/firestore";
 
 const app = express();
 const PORT = 3000;
 
 // Initialize Firebase Web SDK on Server
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+
+const isMockFirebase = !firebaseConfig.apiKey || 
+                       firebaseConfig.apiKey.includes("mock") || 
+                       firebaseConfig.apiKey.includes("placeholder");
+
+let db: any;
+let collection = fsCollection;
+let doc = fsDoc;
+let setDoc = fsSetDoc;
+let query = fsQuery;
+let where = fsWhere;
+let getDocs = fsGetDocs;
+
+if (isMockFirebase) {
+  console.log("⚠️ Using Mock/Fallback Database local store (omnipost_local_db.json) because Firebase config is placeholder.");
+  
+  const LOCAL_DB_PATH = path.join(os.tmpdir(), "omnipost_local_db.json");
+  const readLocalDb = () => {
+    try {
+      if (fs.existsSync(LOCAL_DB_PATH)) {
+        return JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf8"));
+      }
+    } catch (_) {}
+    return { posts: {}, connectedAccounts: {} };
+  };
+  const writeLocalDb = (data: any) => {
+    try {
+      fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), "utf8");
+    } catch (_) {}
+  };
+
+  db = { isMock: true };
+  
+  collection = ((_: any, path: string) => {
+    return { path };
+  }) as any;
+
+  doc = ((_: any, collPath: string, docId: string) => {
+    return { collPath, docId };
+  }) as any;
+
+  setDoc = (async (docRef: any, data: any, options?: { merge?: boolean }) => {
+    const { collPath, docId } = docRef;
+    const dbData = readLocalDb();
+    if (!dbData[collPath]) dbData[collPath] = {};
+    if (options?.merge) {
+      dbData[collPath][docId] = { ...(dbData[collPath][docId] || {}), ...data };
+    } else {
+      dbData[collPath][docId] = data;
+    }
+    writeLocalDb(dbData);
+  }) as any;
+
+  where = ((field: string, op: string, value: any) => {
+    return { field, op, value };
+  }) as any;
+
+  query = ((collRef: any, ...constraints: any[]) => {
+    return { collPath: collRef.path, constraints };
+  }) as any;
+
+  getDocs = (async (queryOrColl: any) => {
+    const collPath = queryOrColl.collPath || queryOrColl.path;
+    const constraints = queryOrColl.constraints || [];
+    const dbData = readLocalDb();
+    const collectionData = dbData[collPath] || {};
+    
+    let docs = Object.values(collectionData);
+    for (const filter of constraints) {
+      if (filter && filter.field) {
+        const { field, op, value } = filter;
+        docs = docs.filter((item: any) => {
+          const itemValue = item[field];
+          if (op === "==") return itemValue === value;
+          return true;
+        });
+      }
+    }
+    
+    return {
+      docs: docs.map((item: any) => ({
+        data: () => item,
+        id: item.id || item.platform
+      }))
+    };
+  }) as any;
+} else {
+  const firebaseApp = initializeApp(firebaseConfig);
+  db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+}
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -267,6 +363,41 @@ app.post('/api/encrypt-credentials', verifyToken, async (req, res) => {
   const { credentialsObj } = req.body;
   const encryptedData = CryptoJS.AES.encrypt(JSON.stringify(credentialsObj), ENCRYPTION_SECRET).toString();
   res.status(200).json({ encryptedData });
+});
+
+// 2b. Sync Companion App Connection (Session Cookie Upload)
+app.post('/api/accounts', verifyToken, async (req, res) => {
+  try {
+    const { platform, method, sessionCookie } = req.body;
+    const userId = (req as any).user.uid;
+    
+    if (!platform || !method || !sessionCookie) {
+      return res.status(400).json({ error: "Missing required fields: platform, method, or sessionCookie" });
+    }
+    
+    // 1. Prepare credentials object & encrypt
+    const credentialsObj = { sessionCookie };
+    const encryptedData = CryptoJS.AES.encrypt(JSON.stringify(credentialsObj), ENCRYPTION_SECRET).toString();
+    
+    // 2. Prepare account structure
+    const accountId = `${userId}_${platform.toLowerCase()}`;
+    const accountData = {
+      userId,
+      platform,
+      method,
+      encryptedData,
+      createdAt: new Date().toISOString()
+    };
+    
+    // 3. Save to Firestore (connectedAccounts collection)
+    await setDoc(doc(db, 'connectedAccounts', accountId), accountData);
+    
+    console.log(`[API] Connected account ${platform} successfully for user ${userId}`);
+    res.status(200).json({ message: `${platform} account connected successfully.` });
+  } catch (error: any) {
+    console.error("Failed to sync connected account:", error);
+    res.status(500).json({ error: error.message || "Failed to sync connected account" });
+  }
 });
 
 // 3. AI Agent Publishing Endpoint (Mocked for now since admin SDK is removed)

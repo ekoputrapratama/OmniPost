@@ -19,10 +19,24 @@ import {
   Plus
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { auth, GoogleAuthProvider, signInWithPopup, signOut, handleFirestoreError, OperationType } from "./firebase";
+import { 
+  auth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  handleFirestoreError, 
+  OperationType,
+  db,
+  isMockFirebase,
+  collection,
+  query,
+  where,
+  getDocs,
+  setDoc,
+  doc,
+  getDocFromServer
+} from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { db } from "./firebase";
-import { collection, query, where, getDocs, setDoc, doc, getDocFromServer } from "firebase/firestore";
 
 const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram"];
 
@@ -54,6 +68,7 @@ export default function App() {
 
   useEffect(() => {
     async function testConnection() {
+      if (isMockFirebase) return;
       try {
         await getDocFromServer(doc(db, 'test', 'connection'));
       } catch (error) {
@@ -67,6 +82,7 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (isMockFirebase) return; // Managed locally
       setUser(u);
       if (u) {
         const t = await u.getIdToken();
@@ -78,10 +94,32 @@ export default function App() {
       }
       setAuthLoading(false);
     });
+    
+    if (isMockFirebase) {
+      setAuthLoading(false);
+    }
+    
     return () => unsubscribe();
   }, []);
 
   const handleLogin = async () => {
+    if (isMockFirebase) {
+      const mockUser = {
+        uid: "demo_user_123",
+        email: "demo@omnipost.io",
+        displayName: "Demo Publisher",
+        getIdToken: async () => {
+          const payload = { user_id: "demo_user_123" };
+          const base64Payload = btoa(JSON.stringify(payload));
+          return `header.${base64Payload}.signature`;
+        }
+      };
+      setUser(mockUser as any);
+      const t = await mockUser.getIdToken();
+      setToken(t);
+      return;
+    }
+
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
@@ -91,6 +129,13 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    if (isMockFirebase) {
+      setUser(null);
+      setToken(null);
+      setPosts([]);
+      setConnectedAccounts([]);
+      return;
+    }
     await signOut(auth);
   };
 
@@ -741,6 +786,7 @@ export default function App() {
                       
                       <a 
                         href={`omnipost://connect?platform=${connectPlatform}&token=${token}`}
+                        target="_blank"
                         className="bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/30 px-6 py-2.5 rounded text-[11px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                       >
                         Launch Companion App

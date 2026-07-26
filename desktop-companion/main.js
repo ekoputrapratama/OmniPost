@@ -18,7 +18,15 @@ let isAuthenticating = false;
 
 // API URL of your deployed Omnipost app
 // UPDATE THIS to your actual deployed app URL before using!
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'https://omnipost-hub.ai.studio';
+
+// 1. Request the single-instance lock
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // 2. Reject the second instance by quitting immediately
+  app.quit();
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -59,6 +67,8 @@ function startPlatformLogin(platform) {
     loginUrl = 'https://twitter.com/i/flow/login';
   } else if (platform.toLowerCase() === 'instagram') {
     loginUrl = 'https://www.instagram.com/accounts/login/';
+  } else if (platform.toLowerCase() === 'facebook') {
+    loginUrl = 'https://www.facebook.com/login/';
   } else {
     loginUrl = 'https://google.com'; // fallback
   }
@@ -70,7 +80,7 @@ function startPlatformLogin(platform) {
     if (!isAuthenticating) return;
     
     // Check if we are on the home page (logged in)
-    if (url === 'https://twitter.com/home' || url === 'https://x.com/home' || url === 'https://www.instagram.com/') {
+    if (url === 'https://twitter.com/home' || url === 'https://x.com/home' || url === 'https://www.instagram.com/' || url === 'https://www.facebook.com/') {
       isAuthenticating = false;
       
       // Get cookies
