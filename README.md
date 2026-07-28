@@ -94,6 +94,7 @@ Below is the current verification and implementation status of OmniPost Automati
   - [x] **Twitter/X**: Automatic textbox populating, sequential local temp-file media upload, and post/tweet click events.
   - [ ] **LinkedIn**: Field focus injection, multi-media uploading, and publish workflows.
   - [ ] **Facebook**: Status message automation and media asset attachment.
+  - [ ] **Instagram**: Automation for photo/video posts and caption injection.
 - [ ] **Automated Background Scheduling Worker**: Server-side chronologically active cron loop (running every 10s) that pulls due posts, downloads any secure media files, decrypts credentials, and publishes them automatically.
 - [ ] **Visual Lifecycle State Tracker**: Real-time reactive labels highlighting progress status (`Queued`, `Processing`, `Scheduled`, `Published`, `Failed`) directly in the user feed.
 
@@ -102,4 +103,10 @@ Below is the current verification and implementation status of OmniPost Automati
 - [ ] **Rich Media Video Uploading**: Support for heavier `.mp4` and `.mov` media uploads through optimal chunking.
 - [ ] **Analytics & Performance Tracking**: Retroactive extraction of post reach, impressions, and engagements directly from automated scraping or platform APIs.
 - [ ] **AI-Powered Hook Writer**: Integrating server-side Gemini models to suggest engaging post variations and optimize content lengths for each target platform.
+
+---
+
+## 📄 License
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](./LICENSE) file for the full license text.
+
 
