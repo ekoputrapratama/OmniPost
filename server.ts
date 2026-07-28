@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.port || 3000;
 
 // Initialize Firebase Web SDK on Server
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));

@@ -50,6 +50,14 @@ Configure your environment secrets in `.env`:
 PORT=3000
 ENCRYPTION_SECRET=your_secure_aes_encryption_key
 AGENT_API_KEY=your_optional_agent_api_key
+VITE_FIREBASE_PROJECT_ID=firebase-project-id
+VITE_FIREBASE_APP_ID=firebase-app-id
+VITE_FIREBASE_API_KEY=firebase-api-key
+VITE_FIREBASE_AUTH_DOMAIN=firebase-auth-domain-name
+VITE_FIREBASE_FIRESTORE_ID=firebase-firestore-database-id
+VITE_FIREBASE_STORAGE_BUCKET=firebase-storage-bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=firebase-messaging-sender-id
+VITE_FIREBASE_OAUTH_CLIENT_ID=firebase-oauth-client-id
 ```
 
 ### Installation & Run
