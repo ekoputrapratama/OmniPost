@@ -10,6 +10,12 @@ import {
   where as fsWhere,
   getDocFromServer as fsGetDocFromServer
 } from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 
 import firebaseConfig from './firebaseConfig';
 
@@ -21,6 +27,7 @@ const isMockFirebase = !firebaseConfig.apiKey ||
                        firebaseConfig.apiKey.includes("placeholder");
 
 let db: any;
+let storage: any;
 let collection = fsCollection;
 let doc = fsDoc;
 let setDoc = fsSetDoc;
@@ -30,6 +37,7 @@ let getDocs = fsGetDocs;
 let getDocFromServer = fsGetDocFromServer;
 
 if (isMockFirebase) {
+  storage = { isMock: true };
   console.log("⚠️ Client-side running in Local Fallback Mock Mode (localStorage)");
   
   const readLocalDb = () => {
@@ -107,6 +115,7 @@ if (isMockFirebase) {
   }) as any;
 } else {
   db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  storage = getStorage(app);
 }
 
 export enum OperationType {
@@ -169,5 +178,9 @@ export {
   query,
   where,
   getDocs,
-  getDocFromServer
+  getDocFromServer,
+  storage,
+  storageRef,
+  uploadBytes,
+  getDownloadURL
 };

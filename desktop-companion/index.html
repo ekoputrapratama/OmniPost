@@ -6,60 +6,303 @@
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0f172a;
-      color: #f8fafc;
+      background-color: #050608;
+      color: #cbd5e1;
+      margin: 0;
+      padding: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
+      min-height: 100vh;
+    }
+    .header {
+      width: 100%;
+      max-width: 600px;
+      padding: 2rem 1.5rem 1rem 1.5rem;
       text-align: center;
+      box-sizing: border-box;
     }
-    .container {
-      max-width: 400px;
-      padding: 2rem;
-      background: rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px;
+    .logo-container {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      background-color: #22d3ee;
+      border-radius: 8px;
+      color: #050608;
+      font-weight: bold;
+      font-size: 24px;
+      margin-bottom: 1rem;
+      box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
     }
-    h1 { margin-top: 0; color: #22d3ee; }
-    p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
-    .pulse {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #22d3ee;
-      box-shadow: 0 0 0 0 rgba(34, 211, 238, 1);
-      margin-bottom: 10px;
-      animation: pulse-cyan 2s infinite;
-    }
-    @keyframes pulse-cyan {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+    h1 {
+      margin: 0 0 0.25rem 0;
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .app-meta {
       font-family: monospace;
       font-size: 11px;
       color: #475569;
-      margin-bottom: 24px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 1.5rem;
+    }
+    .main-content {
+      width: 100%;
+      max-width: 600px;
+      padding: 0 1.5rem 2rem 1.5rem;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .card {
+      background: #0d1117;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.1em;
+      color: #64748b;
+      margin-top: 0;
+      margin-bottom: 1rem;
+    }
+    
+    /* Connection Bar Styles */
+    .connection-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .dot.connected {
+      background-color: #10b981;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    }
+    .dot.disconnected {
+      background-color: #ef4444;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+    }
+    .connection-details {
+      font-size: 11px;
+      color: #64748b;
+      font-family: monospace;
+      margin-top: 0.5rem;
+      word-break: break-all;
+    }
+
+    /* Accounts Grid */
+    .accounts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .account-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+    .platform-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .platform-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f1f5f9;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .platform-badge {
+      font-size: 9px;
+      font-family: monospace;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    .badge-connected {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .badge-disconnected {
+      background-color: rgba(71, 85, 105, 0.15);
+      color: #94a3b8;
+      border: 1px solid rgba(71, 85, 105, 0.2);
+    }
+    
+    /* Buttons */
+    .btn {
+      background-color: transparent;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background-color: #1e293b;
+      border-color: #475569;
+      color: #f8fafc;
+    }
+    .btn-connect {
+      background-color: rgba(34, 211, 238, 0.1);
+      color: #22d3ee;
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      box-shadow: 0 0 10px rgba(34, 211, 238, 0.05);
+    }
+    .btn-connect:hover {
+      background-color: rgba(34, 211, 238, 0.2);
+      border-color: rgba(34, 211, 238, 0.5);
+      color: #22d3ee;
+    }
+    .btn-reconnect {
+      background-color: transparent;
+      color: #94a3b8;
+      border: 1px solid #334155;
+    }
+    .btn-reconnect:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: #475569;
+      color: #ffffff;
+    }
+    .btn-sync {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.6rem;
+      background-color: rgba(255, 255, 255, 0.03);
+      border-color: #1e293b;
+    }
+    .btn-sync:hover {
+      background-color: rgba(255, 255, 255, 0.07);
+    }
+
+    .info-footer {
+      font-size: 11px;
+      color: #475569;
+      text-align: center;
+      line-height: 1.5;
+      margin-top: 1rem;
+    }
+    .info-footer a {
+      color: #22d3ee;
+      text-decoration: none;
+    }
+    .info-footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="pulse"></div>
+  <div class="header">
+    <div class="logo-container">O</div>
     <h1>Omnipost Companion</h1>
     <div class="app-meta" id="app-info">Loading app info...</div>
-    <p>Waiting for deep link...</p>
-    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">Please click "Launch Companion App" from the Omnipost web dashboard to authenticate your accounts securely.</p>
   </div>
-  
+
+  <div class="main-content">
+    <!-- Hub Connection Status Card -->
+    <div class="card">
+      <h2 class="card-title">Web Dashboard Link Status</h2>
+      <div class="connection-bar">
+        <div class="status-indicator" id="hub-status">
+          <div class="dot disconnected" id="hub-dot"></div>
+          <span id="hub-status-text">Disconnected from Web Dashboard</span>
+        </div>
+        <button class="btn" id="refresh-status-btn" style="display: none;">Sync Now</button>
+      </div>
+      <div class="connection-details" id="hub-details">
+        Please launch the companion app from your online Omnipost account to pair the systems securely.
+      </div>
+    </div>
+
+    <!-- Connected Accounts Status Card -->
+    <div class="card">
+      <h2 class="card-title">Social Accounts & Session Sync</h2>
+      <div class="accounts-list">
+        <!-- Twitter/X -->
+        <div class="account-row">
+          <div class="platform-info">
+            <span class="platform-name">Twitter / X</span>
+            <span class="platform-badge badge-disconnected" id="badge-twitter">Offline</span>
+          </div>
+          <button class="btn btn-connect" id="btn-twitter" onclick="startLogin('Twitter')">Connect</button>
+        </div>
+
+        <!-- LinkedIn -->
+        <div class="account-row">
+          <div class="platform-info">
+            <span class="platform-name">LinkedIn</span>
+            <span class="platform-badge badge-disconnected" id="badge-linkedin">Offline</span>
+          </div>
+          <button class="btn btn-connect" id="btn-linkedin" onclick="startLogin('LinkedIn')">Connect</button>
+        </div>
+
+        <!-- Facebook -->
+        <div class="account-row">
+          <div class="platform-info">
+            <span class="platform-name">Facebook</span>
+            <span class="platform-badge badge-disconnected" id="badge-facebook">Offline</span>
+          </div>
+          <button class="btn btn-connect" id="btn-facebook" onclick="startLogin('Facebook')">Connect</button>
+        </div>
+
+        <!-- Instagram -->
+        <div class="account-row">
+          <div class="platform-info">
+            <span class="platform-name">Instagram</span>
+            <span class="platform-badge badge-disconnected" id="badge-instagram">Offline</span>
+          </div>
+          <button class="btn btn-connect" id="btn-instagram" onclick="startLogin('Instagram')">Connect</button>
+        </div>
+      </div>
+      
+      <button class="btn btn-sync" id="sync-accounts-btn" style="display:none;" onclick="syncAccountsStatus()">Refresh Platform Statuses</button>
+    </div>
+
+    <div class="info-footer">
+      Omnipost Companion establishes a sandboxed secure browser context.<br/>
+      No passwords are ever stored or transmitted. Only session cookies are secured.
+    </div>
+  </div>
+
   <script>
+    let currentToken = '';
+    let currentApiBaseUrl = '';
+
+    // Fetch App Info
     if (window.electronAPI && window.electronAPI.getAppInfo) {
       window.electronAPI.getAppInfo().then(info => {
         document.getElementById('app-info').innerText = `${info.name} v${info.version}`;
@@ -67,6 +310,146 @@
         document.getElementById('app-info').innerText = 'omnipost-companion';
       });
     }
+
+    // Trigger Login flow
+    function startLogin(platform) {
+      if (!currentToken) {
+        alert('Please link this Companion App with your Web Dashboard first by clicking "Launch Companion App" from the online browser.');
+        return;
+      }
+      if (window.electronAPI && window.electronAPI.startLogin) {
+        window.electronAPI.startLogin(platform);
+      }
+    }
+
+    // Update connection statuses on the UI
+    function updateUI(status) {
+      const hubDot = document.getElementById('hub-dot');
+      const hubStatusText = document.getElementById('hub-status-text');
+      const hubDetails = document.getElementById('hub-details');
+      const syncBtn = document.getElementById('sync-accounts-btn');
+
+      if (status && status.token) {
+        currentToken = status.token;
+        currentApiBaseUrl = status.apiBaseUrl || 'https://omnipost-hub.ai.studio';
+
+        hubDot.className = 'dot connected';
+        hubStatusText.innerText = 'Paired with Web Hub';
+        hubStatusText.style.color = '#10b981';
+        
+        // Mask the token for safety display
+        const maskedToken = currentToken.length > 15 
+          ? `${currentToken.substring(0, 8)}...${currentToken.substring(currentToken.length - 6)}` 
+          : 'Linked';
+        
+        hubDetails.innerHTML = `
+          <strong>Host:</strong> ${currentApiBaseUrl}<br/>
+          <strong>Token:</strong> <span style="color:#22d3ee">${maskedToken}</span>
+        `;
+        
+        syncBtn.style.display = 'block';
+        syncAccountsStatus();
+      } else {
+        currentToken = '';
+        currentApiBaseUrl = '';
+        hubDot.className = 'dot disconnected';
+        hubStatusText.innerText = 'Disconnected from Web Dashboard';
+        hubStatusText.style.color = '#ef4444';
+        hubDetails.innerText = 'Please launch the companion app from your online Omnipost account to pair the systems securely.';
+        syncBtn.style.display = 'none';
+        
+        // Reset badges
+        ['twitter', 'linkedin', 'facebook', 'instagram'].forEach(plat => {
+          const badge = document.getElementById(`badge-${plat}`);
+          const btn = document.getElementById(`btn-${plat}`);
+          if (badge) {
+            badge.innerText = 'Offline';
+            badge.className = 'platform-badge badge-disconnected';
+          }
+          if (btn) {
+            btn.innerText = 'Connect';
+            btn.className = 'btn btn-connect';
+          }
+        });
+      }
+    }
+
+    // Fetch and Sync connected accounts from the Web API
+    async function syncAccountsStatus() {
+      if (!currentToken || !currentApiBaseUrl) return;
+
+      const syncBtn = document.getElementById('sync-accounts-btn');
+      const originalText = syncBtn.innerText;
+      syncBtn.innerText = 'Syncing...';
+      syncBtn.disabled = true;
+
+      try {
+        const res = await fetch(`${currentApiBaseUrl}/api/accounts`, {
+          headers: {
+            'Authorization': `Bearer ${currentToken}`
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const connectedPlatforms = (data.accounts || []).map(acc => acc.platform.toLowerCase());
+          
+          const platforms = ['twitter', 'linkedin', 'facebook', 'instagram'];
+          platforms.forEach(plat => {
+            const badge = document.getElementById(`badge-${plat}`);
+            const btn = document.getElementById(`btn-${plat}`);
+            
+            // X matches 'twitter'
+            const isConnected = connectedPlatforms.includes(plat) || (plat === 'twitter' && connectedPlatforms.includes('x'));
+            
+            if (isConnected) {
+              if (badge) {
+                badge.innerText = 'Active';
+                badge.className = 'platform-badge badge-connected';
+              }
+              if (btn) {
+                btn.innerText = 'Reconnect';
+                btn.className = 'btn btn-reconnect';
+              }
+            } else {
+              if (badge) {
+                badge.innerText = 'Offline';
+                badge.className = 'platform-badge badge-disconnected';
+              }
+              if (btn) {
+                btn.innerText = 'Connect';
+                btn.className = 'btn btn-connect';
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to sync social statuses:', err);
+      } finally {
+        syncBtn.innerText = originalText;
+        syncBtn.disabled = false;
+      }
+    }
+
+    // Init and listeners
+    if (window.electronAPI) {
+      // Get initial status
+      window.electronAPI.getConnectionStatus().then(status => {
+        updateUI(status);
+      });
+
+      // Listen to deep-link triggers
+      window.electronAPI.onConnectionStatusChanged(status => {
+        updateUI(status);
+      });
+    }
+
+    // Poll statuses every 8 seconds if token is set
+    setInterval(() => {
+      if (currentToken) {
+        syncAccountsStatus();
+      }
+    }, 8000);
   </script>
 </body>
 </html>

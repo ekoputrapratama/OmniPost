@@ -43,7 +43,7 @@ service cloud.firestore {
         && data.method is string
         && data.method.size() <= 50
         && data.encryptedData is string
-        && data.encryptedData.size() <= 10000
+        && data.encryptedData.size() <= 50000
         && data.createdAt is string
         && data.createdAt.size() <= 100;
     }

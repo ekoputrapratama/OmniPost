@@ -75,3 +75,31 @@ AGENT_API_KEY=your_optional_agent_api_key
 
 ## 🔒 Security & Privacy
 OmniPost decrypts social media account credentials *only* temporarily in-memory within the secure containerized backend at the exact moment of browser automation. All user credentials saved in Firestore are encrypted at the client boundary using robust AES-256 standards with a server-configured secret.
+
+---
+
+## 🗺️ Roadmap & Verification Status
+
+Below is the current verification and implementation status of OmniPost Automation Hub's features. We actively test and update this list to keep track of working workflows:
+
+### 📦 Currently Tested & Fully Operational Features
+- [x] **Universal Command Center UI**: Fully styled, responsive cyber-dark dashboard with fluid micro-interactions and transitions using Framer Motion.
+- [x] **Platform Account Manager**: Multi-account integration with secure AES-256 encryption/decryption routines working between the browser client and server.
+- [x] **Immediate Content Dispatch (Instant Publish)**: Synchronous posting via Puppeteer browser automation.
+- [x] **Smart Media Upload Engine**:
+  - [x] Drag-and-drop media uploading on desktop.
+  - [ ] Mobile-friendly manual file upload picker ("Attach Media" button).
+  - [x] Double-fallback cloud-storage: Direct upload to Firebase Storage when fully configured, with automatic base64 in-transit data fallback when running locally.
+- [x] **Multi-Platform Puppeteer Automation**:
+  - [x] **Twitter/X**: Automatic textbox populating, sequential local temp-file media upload, and post/tweet click events.
+  - [ ] **LinkedIn**: Field focus injection, multi-media uploading, and publish workflows.
+  - [ ] **Facebook**: Status message automation and media asset attachment.
+- [ ] **Automated Background Scheduling Worker**: Server-side chronologically active cron loop (running every 10s) that pulls due posts, downloads any secure media files, decrypts credentials, and publishes them automatically.
+- [ ] **Visual Lifecycle State Tracker**: Real-time reactive labels highlighting progress status (`Queued`, `Processing`, `Scheduled`, `Published`, `Failed`) directly in the user feed.
+
+### 🧪 Upcoming / Experimental (In-Progress) Features
+- [ ] **Automated Multi-Factor Authentication (MFA/2FA) Handling**: Out-of-band input prompt to handle OTP codes when browser logins require verification.
+- [ ] **Rich Media Video Uploading**: Support for heavier `.mp4` and `.mov` media uploads through optimal chunking.
+- [ ] **Analytics & Performance Tracking**: Retroactive extraction of post reach, impressions, and engagements directly from automated scraping or platform APIs.
+- [ ] **AI-Powered Hook Writer**: Integrating server-side Gemini models to suggest engaging post variations and optimize content lengths for each target platform.
+

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Post } from "./types";
 import { 
   Terminal, 
@@ -16,7 +16,9 @@ import {
   Copy,
   Check,
   LogOut,
-  Plus
+  Plus,
+  Trash2,
+  Image
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { 
@@ -34,7 +36,11 @@ import {
   getDocs,
   setDoc,
   doc,
-  getDocFromServer
+  getDocFromServer,
+  storage,
+  storageRef,
+  uploadBytes,
+  getDownloadURL
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
@@ -46,7 +52,8 @@ export default function App() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [content, setContent] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaFiles, setMediaFiles] = useState<{name: string, type: string, data: string}[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<{id?: string, name: string, type: string, data: string, uploading?: boolean, url?: string, error?: string}[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["Twitter"]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -65,6 +72,7 @@ export default function App() {
   const [connectSessionCookie, setConnectSessionCookie] = useState("");
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
+  const [disconnectingPlatform, setDisconnectingPlatform] = useState<string | null>(null);
 
   useEffect(() => {
     async function testConnection() {
@@ -182,6 +190,12 @@ export default function App() {
     e.preventDefault();
     if (!content.trim() || selectedPlatforms.length === 0 || !user || !token) return;
 
+    // Check if any media files are still uploading
+    if (mediaFiles.some(f => f.uploading)) {
+      alert("Please wait for all media files to finish uploading.");
+      return;
+    }
+
     setLoading(true);
     try {
       // 1. If scheduling, validate inputs
@@ -220,10 +234,13 @@ export default function App() {
         content,
         platforms: selectedPlatforms,
         status: isScheduled ? 'scheduled' : 'pending',
-        scheduledFor: scheduledForIso,
         createdAt: new Date().toISOString(),
-        mediaUrls: mediaFiles.map(f => f.name) // Dummy, actual will be set by server
+        mediaUrls: mediaFiles.map(f => f.url || f.name) // Use storage URL if uploaded, fallback to name
       };
+
+      if (scheduledForIso !== undefined) {
+        newPost.scheduledFor = scheduledForIso;
+      }
 
       // 4. Save to Firestore immediately
       try {
@@ -244,7 +261,7 @@ export default function App() {
         body: JSON.stringify({
           post: newPost,
           credentialsList,
-          mediaFiles
+          mediaFiles: mediaFiles.filter(f => !f.url) // Only send files that don't have direct Storage URLs
         })
       });
 
@@ -277,13 +294,52 @@ export default function App() {
 
   const handleFiles = (files: File[]) => {
     files.forEach(file => {
+      const tempId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+      
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
+        const base64Data = ev.target?.result as string;
+        const useFirebaseStorage = !isMockFirebase && storage && !storage.isMock;
+
+        // 1. Insert file state with uploading indicator
         setMediaFiles(prev => [...prev, {
+          id: tempId,
           name: file.name,
           type: file.type,
-          data: ev.target?.result as string
+          data: base64Data,
+          uploading: !!useFirebaseStorage
         }]);
+
+        // 2. If storage is available, upload immediately
+        if (useFirebaseStorage) {
+          try {
+            const ext = file.name.split('.').pop() || 'jpg';
+            const storagePath = `users/${user?.uid}/media/${crypto.randomUUID()}.${ext}`;
+            const fileRef = storageRef(storage, storagePath);
+
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
+
+            const uploadResult = await uploadBytes(fileRef, blob, {
+              contentType: file.type
+            });
+            const downloadUrl = await getDownloadURL(uploadResult.ref);
+
+            // Update the file state with resolved URL
+            setMediaFiles(prev => prev.map(f => f.id === tempId ? {
+              ...f,
+              uploading: false,
+              url: downloadUrl
+            } : f));
+          } catch (err: any) {
+            console.error("Firebase Storage upload failed, falling back to local base64:", err);
+            setMediaFiles(prev => prev.map(f => f.id === tempId ? {
+              ...f,
+              uploading: false,
+              error: err.message || "Upload failed"
+            } : f));
+          }
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -343,6 +399,32 @@ export default function App() {
       console.error('Failed to connect account:', e);
     } finally {
       setConnectLoading(false);
+    }
+  };
+
+  const handleDisconnectAccount = async (platform: string) => {
+    if (!token) return;
+    if (!confirm(`Are you sure you want to disconnect your ${platform} account?`)) return;
+    
+    setDisconnectingPlatform(platform);
+    try {
+      const res = await fetch(`/api/accounts/${platform.toLowerCase()}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        fetchAccounts();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || `Failed to disconnect ${platform} account.`);
+      }
+    } catch (err) {
+      console.error(`Error disconnecting ${platform}:`, err);
+      alert(`Error disconnecting ${platform} account.`);
+    } finally {
+      setDisconnectingPlatform(null);
     }
   };
 
@@ -486,10 +568,20 @@ export default function App() {
                 {connectedAccounts.map((acc, i) => (
                   <div key={i} className="flex items-center justify-between bg-black/40 border border-white/5 p-2 rounded">
                     <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{acc.platform}</span>
-                    <span className="text-[9px] font-mono text-green-500 flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                      SECURE
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[9px] font-mono text-green-500 flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                        SECURE
+                      </span>
+                      <button
+                        onClick={() => handleDisconnectAccount(acc.platform)}
+                        disabled={disconnectingPlatform === acc.platform}
+                        className="text-red-500/70 hover:text-red-400 p-1 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        title={`Disconnect ${acc.platform}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -501,7 +593,7 @@ export default function App() {
             <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Manual Post Creation</h2>
             <form onSubmit={handleManualPost} className="flex flex-col h-full flex-1">
               <div 
-                className="relative flex-1 flex flex-col min-h-[120px] mb-4"
+                className="relative flex-1 flex flex-col min-h-[120px]"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleFileDrop}
               >
@@ -516,22 +608,70 @@ export default function App() {
                   Drag & Drop Media
                 </div>
               </div>
+
+              <div className="flex items-center justify-between mb-4 mt-2 bg-black/20 border border-white/5 p-2 rounded">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleFiles(Array.from(e.target.files));
+                      }
+                      e.target.value = '';
+                    }}
+                    multiple
+                    accept="image/*,video/*"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-400/5 hover:bg-cyan-400/10 px-2.5 py-1.5 rounded border border-cyan-400/15"
+                  >
+                    <Image className="w-3.5 h-3.5" />
+                    Attach Media
+                  </button>
+                </div>
+                <div className="text-[8px] text-slate-600 font-mono uppercase tracking-widest hidden sm:block">
+                  or drag & drop files above
+                </div>
+              </div>
               
               {mediaFiles.length > 0 && (
                 <div className="mb-4 flex flex-wrap gap-2">
                   {mediaFiles.map((file, i) => (
                     <div key={i} className="relative w-16 h-16 rounded border border-white/10 overflow-hidden bg-black/50 shrink-0">
                       {file.type.startsWith('image') ? (
-                        <img src={file.data} alt="preview" className="w-full h-full object-cover" />
+                        <img src={file.url || file.data} alt="preview" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-slate-500 p-1 text-center break-all">
                           {file.name}
                         </div>
                       )}
+                      
+                      {file.uploading && (
+                        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center">
+                          <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />
+                          <span className="text-[7px] text-cyan-400 uppercase tracking-widest mt-1">Uploading</span>
+                        </div>
+                      )}
+                      {file.error && (
+                        <div className="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center p-1 text-center" title={file.error}>
+                          <AlertCircle className="w-4 h-4 text-red-400" />
+                          <span className="text-[7px] text-red-400 uppercase tracking-widest mt-0.5">Failed</span>
+                        </div>
+                      )}
+                      {!file.uploading && !file.error && file.url && (
+                        <div className="absolute bottom-0.5 left-0.5 bg-green-500/80 rounded px-1 text-[7px] font-bold text-white uppercase tracking-wider flex items-center gap-0.5 shadow-sm">
+                          <CheckCircle2 className="w-2 h-2" /> Cloud
+                        </div>
+                      )}
+
                       <button 
                         type="button"
                         onClick={() => setMediaFiles(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-0.5 right-0.5 bg-red-500/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold"
+                        className="absolute top-0.5 right-0.5 bg-red-500/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold z-10"
                       >
                         ✕
                       </button>
@@ -613,17 +753,19 @@ export default function App() {
 
               <button
                 type="submit"
-                disabled={loading || !content.trim() || selectedPlatforms.length === 0}
+                disabled={loading || !content.trim() || selectedPlatforms.length === 0 || mediaFiles.some(f => f.uploading)}
                 className="mt-auto w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded py-3 text-[10px] font-bold uppercase tracking-widest text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                ) : mediaFiles.some(f => f.uploading) ? (
                   <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
                 ) : isScheduled ? (
                   <Clock className="w-4 h-4 text-cyan-400" />
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
-                {loading ? "Allocating Instance..." : isScheduled ? "Schedule Payload" : "Dispatch Payload"}
+                {loading ? "Allocating Instance..." : mediaFiles.some(f => f.uploading) ? "Uploading Media..." : isScheduled ? "Schedule Payload" : "Dispatch Payload"}
               </button>
             </form>
           </div>
@@ -785,7 +927,7 @@ export default function App() {
                       </p>
                       
                       <a 
-                        href={`omnipost://connect?platform=${connectPlatform}&token=${token}`}
+                        href={`omnipost://connect?platform=${connectPlatform}&token=${token}&host=${encodeURIComponent(window.location.origin)}`}
                         target="_blank"
                         className="bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/30 px-6 py-2.5 rounded text-[11px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                       >

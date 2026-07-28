@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, ipcMain, dialog } = require('electron');
 const path = require('path');
 const axios = require('axios');
+const fs = require('fs');
 
 // Set up custom protocol
 if (process.defaultApp) {
@@ -15,10 +16,35 @@ let mainWindow;
 let targetPlatform = '';
 let authToken = '';
 let isAuthenticating = false;
+let API_BASE_URL = 'https://omnipost-hub.ai.studio';
 
-// API URL of your deployed Omnipost app
-// UPDATE THIS to your actual deployed app URL before using!
-const API_BASE_URL = 'https://omnipost-hub.ai.studio';
+let configPath;
+app.whenReady().then(() => {
+  configPath = path.join(app.getPath('userData'), 'omnipost_companion_config.json');
+  loadConfig();
+});
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.token) authToken = config.token;
+      if (config.apiBaseUrl) API_BASE_URL = config.apiBaseUrl;
+      return config;
+    }
+  } catch (err) {
+    console.error('Failed to load config:', err);
+  }
+  return { token: '', apiBaseUrl: 'https://omnipost-hub.ai.studio' };
+}
+
+function saveConfig(config) {
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save config:', err);
+  }
+}
 
 // 1. Request the single-instance lock
 const gotTheLock = app.requestSingleInstanceLock();
@@ -47,8 +73,23 @@ function createWindow() {
 function handleDeepLink(url) {
   try {
     const urlObj = new URL(url);
+    const hostParam = urlObj.searchParams.get('host');
+    if (hostParam) {
+      API_BASE_URL = decodeURIComponent(hostParam);
+    }
     targetPlatform = urlObj.searchParams.get('platform');
     authToken = urlObj.searchParams.get('token');
+
+    // Save configuration
+    saveConfig({ token: authToken, apiBaseUrl: API_BASE_URL });
+
+    // Notify renderer if mainWindow is active
+    if (mainWindow) {
+      mainWindow.webContents.send('connection-status-changed', {
+        token: authToken,
+        apiBaseUrl: API_BASE_URL
+      });
+    }
 
     if (targetPlatform && authToken) {
       startPlatformLogin(targetPlatform);
@@ -69,6 +110,8 @@ function startPlatformLogin(platform) {
     loginUrl = 'https://www.instagram.com/accounts/login/';
   } else if (platform.toLowerCase() === 'facebook') {
     loginUrl = 'https://www.facebook.com/login/';
+  } else if (platform.toLowerCase() === 'linkedin') {
+    loginUrl = 'https://www.linkedin.com/login';
   } else {
     loginUrl = 'https://google.com'; // fallback
   }
@@ -79,15 +122,32 @@ function startPlatformLogin(platform) {
   mainWindow.webContents.on('did-navigate', async (event, url) => {
     if (!isAuthenticating) return;
     
+    const urlObj = new URL(url);
     // Check if we are on the home page (logged in)
-    if (url === 'https://twitter.com/home' || url === 'https://x.com/home' || url === 'https://www.instagram.com/' || url === 'https://www.facebook.com/') {
+    if (url === 'https://twitter.com/home' || url === 'https://x.com/home' || url === 'https://www.instagram.com/' || (urlObj.host === 'www.facebook.com' && (urlObj.pathname === '/' || urlObj.pathname === '/home.php')) || url.includes('linkedin.com/feed')) {
       isAuthenticating = false;
       
       // Get cookies
       try {
         const cookies = await session.defaultSession.cookies.get({});
-        // Format cookies into a raw string
-        const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        
+        // Format cookies into a raw string, but only for the relevant platform domain to reduce size and improve security
+        const platLower = platform.toLowerCase();
+        const filteredCookies = cookies.filter(c => {
+          if (!c.domain) return false;
+          if (platLower === 'twitter' || platLower === 'x') {
+            return c.domain.includes('twitter.com') || c.domain.includes('x.com');
+          } else if (platLower === 'instagram') {
+            return c.domain.includes('instagram.com');
+          } else if (platLower === 'facebook') {
+            return c.domain.includes('facebook.com');
+          } else if (platLower === 'linkedin') {
+            return c.domain.includes('linkedin.com');
+          }
+          return false;
+        });
+
+        const cookieString = filteredCookies.map(c => `${c.name}=${c.value}`).join('; ');
         
         // Send back to Omnipost API
         mainWindow.loadFile('success.html');
@@ -132,6 +192,13 @@ app.whenReady().then(() => {
     return {
       name: app.getName() || 'Omnipost Companion',
       version: app.getVersion() || '1.0.0'
+    };
+  });
+
+  ipcMain.handle('get-connection-status', () => {
+    return {
+      token: authToken,
+      apiBaseUrl: API_BASE_URL
     };
   });
 
