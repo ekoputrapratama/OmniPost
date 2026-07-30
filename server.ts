@@ -277,41 +277,124 @@ async function publishViaBrowser(content: string, platform: string, credentials:
         platformDomain = ".linkedin.com";
       }
 
-      const reservedAttributes = ["path", "domain", "expires", "secure", "httponly", "samesite", "max-age"];
+      let parsedCookies: any[] = [];
+      const sessionStr = credentials.sessionCookie.trim();
 
-      const cookieArray = credentials.sessionCookie.split(";")
-        .map((c: string) => c.trim())
-        .filter((c: string) => c.length > 0 && c.includes("="))
-        .map((c: string) => {
-          const parts = c.split("=");
-          const name = parts[0].trim();
-          const value = parts.slice(1).join("=").trim();
-          
-          if (!name || reservedAttributes.includes(name.toLowerCase())) {
-            return null;
+      // Check if it's a JSON array
+      if (sessionStr.startsWith("[") && sessionStr.endsWith("]")) {
+        try {
+          const jsonCookies = JSON.parse(sessionStr);
+          if (Array.isArray(jsonCookies)) {
+            parsedCookies = jsonCookies.map((c: any) => {
+              return {
+                name: c.name || c.key,
+                value: c.value,
+                domain: c.domain,
+                path: c.path || "/",
+                secure: c.secure !== undefined ? c.secure : true,
+              };
+            });
           }
-          
-          const cookieObj: any = {
-            name,
-            value,
-            path: "/",
-            secure: true,
-          };
+        } catch (jsonErr) {
+          console.warn("[Automation] Failed to parse cookies as JSON, falling back to semicolon string parser", jsonErr);
+        }
+      }
 
+      // If not parsed as JSON, parse as semicolon string
+      if (parsedCookies.length === 0) {
+        const reservedAttributes = ["path", "domain", "expires", "secure", "httponly", "samesite", "max-age"];
+        parsedCookies = sessionStr.split(";")
+          .map((c: string) => c.trim())
+          .filter((c: string) => c.length > 0 && c.includes("="))
+          .map((c: string) => {
+            const parts = c.split("=");
+            const name = parts[0].trim();
+            const value = parts.slice(1).join("=").trim();
+            
+            if (!name || reservedAttributes.includes(name.toLowerCase())) {
+              return null;
+            }
+            
+            return {
+              name,
+              value,
+              path: "/",
+              secure: true,
+            };
+          })
+          .filter((c: any) => c !== null && c.name.length > 0 && c.value.length > 0);
+      }
+
+      // Filter cookies to prevent cross-contamination from other platforms
+      const filteredCookies = parsedCookies.filter((cookie: any) => {
+        const nameLower = cookie.name.toLowerCase();
+
+        // 1. If JSON cookie has an explicit domain, check if it matches the target platform domain
+        if (cookie.domain) {
+          const dom = cookie.domain.toLowerCase();
+          if (platLower === "instagram" && !dom.includes("instagram.com")) return false;
+          if ((platLower === "twitter" || platLower === "x") && !dom.includes("x.com") && !dom.includes("twitter.com")) return false;
+          if (platLower === "linkedin" && !dom.includes("linkedin.com")) return false;
+          if (platLower === "facebook" && !dom.includes("facebook.com")) return false;
+        }
+
+        // 2. Filter out keys that exclusively belong to other platforms (anti-cross-contamination)
+        if (platLower === "instagram") {
+          if (["li_at", "bcookie", "bscookie", "jsessionid"].includes(nameLower)) return false; // LinkedIn
+          if (["auth_token", "ct0", "twid"].includes(nameLower)) return false; // Twitter/X
+          if (["c_user", "xs"].includes(nameLower)) return false; // Facebook
+        } else if (platLower === "twitter" || platLower === "x") {
+          if (["sessionid", "ds_user_id", "ig_did"].includes(nameLower)) return false; // Instagram
+          if (["li_at", "bcookie", "bscookie", "jsessionid"].includes(nameLower)) return false; // LinkedIn
+          if (["c_user", "xs"].includes(nameLower)) return false; // Facebook
+        } else if (platLower === "linkedin") {
+          if (["sessionid", "ds_user_id", "ig_did"].includes(nameLower)) return false; // Instagram
+          if (["auth_token", "ct0", "twid"].includes(nameLower)) return false; // Twitter/X
+          if (["c_user", "xs"].includes(nameLower)) return false; // Facebook
+        } else if (platLower === "facebook") {
+          if (["sessionid", "ds_user_id", "ig_did"].includes(nameLower)) return false; // Instagram
+          if (["auth_token", "ct0", "twid"].includes(nameLower)) return false; // Twitter/X
+          if (["li_at", "bcookie", "bscookie", "jsessionid"].includes(nameLower)) return false; // LinkedIn
+        }
+
+        return true;
+      });
+
+      // De-duplicate cookies by name (keep the last one encountered, usually the most fresh one)
+      const uniqueCookies: any[] = [];
+      const seenNames = new Set<string>();
+      for (let i = filteredCookies.length - 1; i >= 0; i--) {
+        const cookie = filteredCookies[i];
+        if (!seenNames.has(cookie.name)) {
+          seenNames.add(cookie.name);
+          uniqueCookies.unshift(cookie);
+        }
+      }
+
+      // Format cookies for Puppeteer setCookie
+      const cookieArray = uniqueCookies.map((cookie: any) => {
+        const cookieObj: any = {
+          name: cookie.name,
+          value: cookie.value,
+          path: cookie.path || "/",
+          secure: true,
+        };
+
+        if (cookie.domain) {
+          cookieObj.domain = cookie.domain;
+        } else {
           // __Host- cookies must NOT have a domain property, but must have url
-          if (name.startsWith("__Host-")) {
-            cookieObj.url = platformUrl;
-          } else {
+          if (!cookie.name.startsWith("__Host-")) {
             cookieObj.domain = platformDomain;
-            cookieObj.url = platformUrl;
           }
+        }
 
-          return cookieObj;
-        })
-        .filter((c: any) => c !== null && c.name.length > 0 && c.value.length > 0);
+        cookieObj.url = platformUrl;
+        return cookieObj;
+      });
 
       if (cookieArray.length > 0) {
-        console.log(`[Automation] Injecting ${cookieArray.length} parsed and sanitized cookies...`);
+        console.log(`[Automation] Injecting ${cookieArray.length} parsed and sanitized cookies (filtered from ${parsedCookies.length} total keys)...`);
         await page.setCookie(...cookieArray);
       } else {
         console.warn(`[Automation] ⚠️ No valid cookies parsed from sessionCookie string`);
