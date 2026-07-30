@@ -73,6 +73,8 @@ export default function App() {
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
   const [disconnectingPlatform, setDisconnectingPlatform] = useState<string | null>(null);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function testConnection() {
@@ -192,7 +194,13 @@ export default function App() {
 
     // Check if any media files are still uploading
     if (mediaFiles.some(f => f.uploading)) {
-      alert("Please wait for all media files to finish uploading.");
+      setErrorMessage("Please wait for all media files to finish uploading.");
+      return;
+    }
+
+    // Instagram validation: require at least one media file
+    if (selectedPlatforms.some(plat => plat.toLowerCase() === "instagram") && mediaFiles.length === 0) {
+      setErrorMessage("Instagram is a visual-first platform and strictly requires at least one image or video to create a post. Please attach a media file.");
       return;
     }
 
@@ -202,13 +210,13 @@ export default function App() {
       let scheduledForIso: string | undefined = undefined;
       if (isScheduled) {
         if (!scheduledDate || !scheduledTime) {
-          alert("Please specify both a target date and time.");
+          setErrorMessage("Please specify both a target date and time.");
           setLoading(false);
           return;
         }
         const schedDate = new Date(`${scheduledDate}T${scheduledTime}`);
         if (schedDate.getTime() <= Date.now()) {
-          alert("Scheduled dispatch time must be in the future.");
+          setErrorMessage("Scheduled dispatch time must be in the future.");
           setLoading(false);
           return;
         }
@@ -402,11 +410,15 @@ export default function App() {
     }
   };
 
-  const handleDisconnectAccount = async (platform: string) => {
+  const handleDisconnectAccount = (platform: string) => {
+    setShowDisconnectConfirm(platform);
+  };
+
+  const executeDisconnectAccount = async (platform: string) => {
     if (!token) return;
-    if (!confirm(`Are you sure you want to disconnect your ${platform} account?`)) return;
     
     setDisconnectingPlatform(platform);
+    setShowDisconnectConfirm(null);
     try {
       const res = await fetch(`/api/accounts/${platform.toLowerCase()}`, {
         method: 'DELETE',
@@ -418,11 +430,11 @@ export default function App() {
         fetchAccounts();
       } else {
         const errData = await res.json();
-        alert(errData.error || `Failed to disconnect ${platform} account.`);
+        setErrorMessage(errData.error || `Failed to disconnect ${platform} account.`);
       }
     } catch (err) {
       console.error(`Error disconnecting ${platform}:`, err);
-      alert(`Error disconnecting ${platform} account.`);
+      setErrorMessage(`Error disconnecting ${platform} account.`);
     } finally {
       setDisconnectingPlatform(null);
     }
@@ -1024,6 +1036,63 @@ export default function App() {
                   )}
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Disconnect Confirmation Modal */}
+        {showDisconnectConfirm && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-[#0d1117] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                <h3 className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Disconnect Account</h3>
+                <button onClick={() => setShowDisconnectConfirm(null)} className="text-slate-500 hover:text-white">✕</button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-slate-300 leading-relaxed mb-6">
+                  Are you sure you want to disconnect your <span className="text-cyan-400 font-bold uppercase">{showDisconnectConfirm}</span> account? This will revoke active session keys.
+                </p>
+                <div className="flex gap-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowDisconnectConfirm(null)}
+                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => executeDisconnectAccount(showDisconnectConfirm)}
+                    className="flex-1 py-3 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/50 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Alert/Error Modal */}
+        {errorMessage && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-[#0d1117] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                <h3 className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Notification</h3>
+                <button onClick={() => setErrorMessage(null)} className="text-slate-500 hover:text-white">✕</button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-slate-300 leading-relaxed mb-6">
+                  {errorMessage}
+                </p>
+                <button 
+                  type="button" 
+                  onClick={() => setErrorMessage(null)}
+                  className="w-full py-3 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/50 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                >
+                  Confirm
+                </button>
+              </div>
             </div>
           </div>
         )}

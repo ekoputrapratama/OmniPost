@@ -20,7 +20,7 @@ import {
 } from "firebase/firestore";
 
 const app = express();
-const PORT = process.env.port || 3000;
+const PORT: number = Number(process.env.PORT || process.env.port || 3000);
 
 // Initialize Firebase Web SDK on Server
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
@@ -187,7 +187,8 @@ async function verifyToken(req: express.Request, res: express.Response, next: ex
 // ----------------------------------------------------------------------
 async function publishViaBrowser(content: string, platform: string, credentials: any, mediaUrls?: string[]) {
   console.log(`\n[Automation] Initializing headless browser for ${platform}...`);
-  let browser;
+  let browser: any;
+  let page: any = null;
   let launchedSuccessfully = false;
   const localMediaPaths: string[] = [];
   try {
@@ -229,7 +230,7 @@ async function publishViaBrowser(content: string, platform: string, credentials:
       headless: true,
     });
     launchedSuccessfully = true;
-    const page = await browser.newPage();
+    page = await browser.newPage();
     
     // Set standard desktop User-Agent and viewport to avoid simple bot detection
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
@@ -238,31 +239,64 @@ async function publishViaBrowser(content: string, platform: string, credentials:
     // Inject session cookies if they exist
     if (credentials && credentials.sessionCookie) {
       console.log(`[Automation] Injecting session cookies for ${platform}...`);
-      const cookieArray = credentials.sessionCookie.split(";").map((c: string) => {
-        const parts = c.trim().split("=");
-        const name = parts[0];
-        const value = parts.slice(1).join("=");
-        
-        let domain = "";
-        const platLower = platform.toLowerCase();
-        if (platLower === "twitter" || platLower === "x") {
-          domain = ".x.com";
-        } else if (platLower === "instagram") {
-          domain = ".instagram.com";
-        } else if (platLower === "facebook") {
-          domain = ".facebook.com";
-        } else if (platLower === "linkedin") {
-          domain = ".linkedin.com";
-        }
-        
-        return {
-          name,
-          value,
-          domain,
-          path: "/"
-        };
-      });
-      await page.setCookie(...cookieArray);
+      
+      const platLower = platform.toLowerCase();
+      let platformUrl = "";
+      let platformDomain = "";
+      
+      if (platLower === "twitter" || platLower === "x") {
+        platformUrl = "https://x.com";
+        platformDomain = ".x.com";
+      } else if (platLower === "instagram") {
+        platformUrl = "https://www.instagram.com";
+        platformDomain = ".instagram.com";
+      } else if (platLower === "facebook") {
+        platformUrl = "https://www.facebook.com";
+        platformDomain = ".facebook.com";
+      } else if (platLower === "linkedin") {
+        platformUrl = "https://www.linkedin.com";
+        platformDomain = ".linkedin.com";
+      }
+
+      const reservedAttributes = ["path", "domain", "expires", "secure", "httponly", "samesite", "max-age"];
+
+      const cookieArray = credentials.sessionCookie.split(";")
+        .map((c: string) => c.trim())
+        .filter((c: string) => c.length > 0 && c.includes("="))
+        .map((c: string) => {
+          const parts = c.split("=");
+          const name = parts[0].trim();
+          const value = parts.slice(1).join("=").trim();
+          
+          if (!name || reservedAttributes.includes(name.toLowerCase())) {
+            return null;
+          }
+          
+          const cookieObj: any = {
+            name,
+            value,
+            path: "/",
+            secure: true,
+          };
+
+          // __Host- cookies must NOT have a domain property, but must have url
+          if (name.startsWith("__Host-")) {
+            cookieObj.url = platformUrl;
+          } else {
+            cookieObj.domain = platformDomain;
+            cookieObj.url = platformUrl;
+          }
+
+          return cookieObj;
+        })
+        .filter((c: any) => c !== null && c.name.length > 0 && c.value.length > 0);
+
+      if (cookieArray.length > 0) {
+        console.log(`[Automation] Injecting ${cookieArray.length} parsed and sanitized cookies...`);
+        await page.setCookie(...cookieArray);
+      } else {
+        console.warn(`[Automation] ⚠️ No valid cookies parsed from sessionCookie string`);
+      }
     } else {
       console.log(`[Automation] ⚠️ Warning: No session cookies provided for ${platform}`);
     }
@@ -270,7 +304,16 @@ async function publishViaBrowser(content: string, platform: string, credentials:
     const platLower = platform.toLowerCase();
     if (platLower === "twitter" || platLower === "x") {
       console.log(`[Automation] Navigating to X/Twitter compose page...`);
-      await page.goto("https://x.com/compose/post", { waitUntil: "networkidle2", timeout: 45000 });
+      try {
+        await page.goto("https://x.com/compose/post", { waitUntil: "load", timeout: 30000 });
+      } catch (navErr: any) {
+        console.warn(`[Automation] X/Twitter navigation warning/timeout, checking if DOM is ready anyway:`, navErr.message || navErr);
+      }
+      
+      const currentUrl = page.url();
+      if (currentUrl.includes("login") || currentUrl.includes("signup") || currentUrl.includes("welcome")) {
+        throw new Error("Authentication failed: X/Twitter redirected to a login or signup page. Please refresh your session cookies.");
+      }
       
       console.log(`[Automation] Locating compose text area...`);
       const textboxSelector = '[data-testid="tweetTextarea_0"], div[role="textbox"]';
@@ -311,12 +354,79 @@ async function publishViaBrowser(content: string, platform: string, credentials:
       console.log(`[Automation] ✅ Successfully published to Twitter/X`);
     } else if (platLower === "linkedin") {
       console.log(`[Automation] Navigating to LinkedIn feed page...`);
-      await page.goto("https://www.linkedin.com/feed/", { waitUntil: "networkidle2", timeout: 45000 });
+      try {
+        await page.goto("https://www.linkedin.com/feed/", { waitUntil: "load", timeout: 30000 });
+      } catch (navErr: any) {
+        console.warn(`[Automation] LinkedIn navigation warning/timeout, checking if DOM is ready anyway:`, navErr.message || navErr);
+      }
+      
+      const currentUrl = page.url();
+      if (currentUrl.includes("login") || currentUrl.includes("signup") || currentUrl.includes("checkpoint") || currentUrl.includes("signup-wall")) {
+        throw new Error("Authentication failed: LinkedIn redirected to a login, signup, or security checkpoint page. Please refresh your session cookies.");
+      }
       
       console.log(`[Automation] Clicking "Start a post" trigger...`);
-      const triggerSelector = "button.share-box-feed-entry__trigger";
-      await page.waitForSelector(triggerSelector, { timeout: 15000 });
-      await page.click(triggerSelector);
+      const triggerSelector = "button.share-box-feed-entry__trigger, .share-box-feed-entry__trigger, button.share-box-trigger, .share-box-trigger, button.share-box__trigger, [data-control-name='share_box'], .share-box-feed-entry__trigger-text";
+      
+      let triggerClicked = false;
+      try {
+        await page.waitForSelector(triggerSelector, { timeout: 15000 });
+        const triggerElements = await page.$$(triggerSelector);
+        if (triggerElements.length > 0) {
+          console.log(`[Automation] Found trigger element using selector, clicking...`);
+          await triggerElements[0].click();
+          triggerClicked = true;
+        }
+      } catch (err) {
+        console.warn(`[Automation] Target selector not found or click timed out:`, err);
+      }
+
+      if (!triggerClicked) {
+        console.log(`[Automation] Selector-based wait failed. Attempting text-based trigger search via evaluate...`);
+        triggerClicked = await page.evaluate(new Function(`
+          const elements = Array.from(document.querySelectorAll("button, div[role='button'], span, p"));
+          const trigger = elements.find((el) => {
+            const text = el.textContent ? el.textContent.toLowerCase() : "";
+            const isTargetText = 
+              text.includes("start a post") ||
+              text.includes("mulai postingan") ||
+              text.includes("buat postingan") ||
+              text.includes("write something") ||
+              text.includes("crear publicación") ||
+              text.includes("crear publicacion") ||
+              text.includes("commencer un post") ||
+              text.includes("beitrag erstellen") ||
+              text.includes("criar publicação") ||
+              text.includes("criar publicacao") ||
+              text.includes("share an update") ||
+              text.includes("what's on your mind");
+            
+            const isTargetClass = el.className && typeof el.className === "string" && (
+              el.className.includes("share-box-feed-entry") ||
+              el.className.includes("share-box-trigger") ||
+              el.className.includes("share-box__trigger")
+            );
+
+            return isTargetText || isTargetClass;
+          });
+
+          if (trigger) {
+            trigger.click();
+            return true;
+          }
+          return false;
+        `));
+      }
+
+      if (!triggerClicked) {
+        console.warn(`[Automation] Text-based trigger click fell back, waiting anyway...`);
+        try {
+          await page.click("button.share-box-feed-entry__trigger");
+          triggerClicked = true;
+        } catch (desperateErr) {
+          console.error(`[Automation] Final fallback trigger click failed:`, desperateErr);
+        }
+      }
       
       console.log(`[Automation] Locating editor textbox...`);
       const editorSelector = "div.ql-editor, div[role='textbox']";
@@ -344,89 +454,783 @@ async function publishViaBrowser(content: string, platform: string, credentials:
         }
       }
       
-      console.log(`[Automation] Clicking Post button...`);
-      const postBtnSelector = "button.share-actions__primary-action";
-      await page.waitForSelector(postBtnSelector, { timeout: 5000 });
-      await page.click(postBtnSelector);
+      console.log(`[Automation] Locating and clicking LinkedIn Post button...`);
+      const postBtnSelector = "button.share-actions__primary-action, button.artdeco-button--primary, button[id^='ember']";
       
-      await new Promise((r) => setTimeout(r, 4000));
+      let liClicked = false;
+      try {
+        await page.waitForSelector(postBtnSelector, { timeout: 10000 });
+        const buttons = await page.$$(postBtnSelector);
+        for (const btn of buttons) {
+          const text = await page.evaluate(new Function('el', 'return el.textContent ? el.textContent.trim().toLowerCase() : "";'), btn);
+          if (text && (text === "post" || text === "publish" || text.includes("post") || text.includes("publish"))) {
+            console.log(`[Automation] Clicking LinkedIn Post button via matched handle...`);
+            await btn.click();
+            liClicked = true;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Automation] Error finding LinkedIn Post button by handle/text:`, err);
+      }
+
+      if (!liClicked) {
+        console.log(`[Automation] Direct handle click failed or not found, attempting general element click fallback...`);
+        liClicked = await page.evaluate(new Function(`
+          const buttons = Array.from(document.querySelectorAll("button"));
+          const postButton = buttons.find((b) => {
+            const text = b.textContent ? b.textContent.trim().toLowerCase() : "";
+            const matchesClass = b.classList.contains("share-actions__primary-action") || b.classList.contains("artdeco-button--primary");
+            const matchesText = text === "post" || text === "publish" || text.includes("post");
+            return matchesClass || matchesText;
+          });
+          if (postButton) {
+            postButton.click();
+            return true;
+          }
+          return false;
+        `));
+      }
+      
+      if (!liClicked) {
+        console.warn(`[Automation] Post button not explicitly triggered, trying blind click on first matching selector...`);
+        try {
+          await page.click("button.share-actions__primary-action");
+        } catch (blindErr) {
+          console.error(`[Automation] Blind click failed:`, blindErr);
+        }
+      }
+      
+      await new Promise((r) => setTimeout(r, 6000));
       console.log(`[Automation] ✅ Successfully published to LinkedIn`);
     } else if (platLower === "facebook") {
       console.log(`[Automation] Navigating to Facebook home page...`);
-      await page.goto("https://www.facebook.com/", { waitUntil: "networkidle2", timeout: 45000 });
+      try {
+        await page.goto("https://www.facebook.com/", { waitUntil: "load", timeout: 30000 });
+      } catch (navErr: any) {
+        console.warn(`[Automation] Facebook navigation warning/timeout, checking if DOM is ready anyway:`, navErr.message || navErr);
+      }
+      
+      const currentUrl = page.url();
+      if (currentUrl.includes("login") || currentUrl.includes("checkpoint") || currentUrl.includes("recover") || currentUrl.includes("unsupportedbrowser")) {
+        throw new Error("Authentication failed: Facebook redirected to a login, security checkpoint, browser verification, or recovery page. Please refresh your session cookies.");
+      }
       
       console.log(`[Automation] Clicking compose post trigger...`);
       await page.waitForSelector("div[role='button']", { timeout: 15000 });
       
-      await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll("div[role='button']"));
-        const postButton = buttons.find((b: any) => b.textContent && b.textContent.includes("What's on your mind"));
-        if (postButton) {
-          (postButton as any).click();
+      // 1. Locate and click the trigger box with translation-friendly handles
+      let postTrigger = null;
+      try {
+        const buttons = await page.$$("div[role='button'], div[role='link']");
+        for (const btn of buttons) {
+          const text = await page.evaluate(new Function('el', 'return el.textContent || "";'), btn);
+          if (text && (
+            text.includes("What's on your mind") ||
+            text.includes("Apa yang Anda pikirkan") ||
+            text.includes("Apa yang dipikirkan") ||
+            text.includes("pikirkan") ||
+            text.includes("pensando") ||
+            text.includes("piensas") ||
+            text.includes("voulez-vous") ||
+            text.includes("düşünüyorsun") ||
+            text.includes("nghĩ gì") ||
+            text.includes("isip mo") ||
+            text.includes("بم تفكر") ||
+            text.includes("Create a post") ||
+            text.includes("Create post") ||
+            text.includes("Buat postingan") ||
+            text.includes("Buat Postingan") ||
+            text.includes("Write something") ||
+            text.includes("Tulis sesuatu")
+          )) {
+            postTrigger = btn;
+            break;
+          }
         }
-      });
+      } catch (err) {
+        console.error(`[Automation] Error finding trigger button with handle:`, err);
+      }
+
+      if (postTrigger) {
+        console.log(`[Automation] Clicking compose post trigger using Puppeteer handle...`);
+        await postTrigger.click();
+      } else {
+        console.log(`[Automation] Direct trigger text match with handle failed, executing evaluate click fallback...`);
+        await page.evaluate(new Function(`
+          const buttons = Array.from(document.querySelectorAll("div[role='button'], div[role='link']"));
+          const postButton = buttons.find((b) => {
+            const text = b.textContent || "";
+            return (
+              text.includes("What's on your mind") ||
+              text.includes("Apa yang Anda pikirkan") ||
+              text.includes("Apa yang dipikirkan") ||
+              text.includes("pikirkan") ||
+              text.includes("pensando") ||
+              text.includes("piensas") ||
+              text.includes("voulez-vous") ||
+              text.includes("düşünüyorsun") ||
+              text.includes("nghĩ gì") ||
+              text.includes("isip mo") ||
+              text.includes("بم تفكر") ||
+              text.includes("Create a post") ||
+              text.includes("Create post") ||
+              text.includes("Buat postingan") ||
+              text.includes("Buat Postingan") ||
+              text.includes("Write something") ||
+              text.includes("Tulis sesuatu")
+            );
+          });
+          if (postButton) {
+            postButton.click();
+          }
+        `));
+      }
       
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 3000));
       
       console.log(`[Automation] Locating Facebook compose textbox...`);
-      const fbEditorSelector = "div[role='textbox']";
-      await page.waitForSelector(fbEditorSelector, { timeout: 10000 });
+      // Use multi-selector fallback to find any active post editor text fields
+      const fbEditorSelector = "div[role='textbox'], div[contenteditable='true'], [aria-label*='mind'], [aria-label*='pikirkan'], [aria-label*='thinking'], [aria-label*='post']";
+      await page.waitForSelector(fbEditorSelector, { timeout: 15000 });
       
       console.log(`[Automation] Injecting post content...`);
       await page.focus(fbEditorSelector);
       await page.type(fbEditorSelector, content, { delay: 50 });
       
       await new Promise((r) => setTimeout(r, 1500));
-
       if (localMediaPaths.length > 0) {
-        console.log(`[Automation] Locating Facebook file input...`);
-        const fbFileInputSelector = 'input[type="file"]';
+        console.log(`[Automation] Uploading media requested. Attempting to click Photo/Video trigger button first...`);
         try {
-          await page.waitForSelector(fbFileInputSelector, { timeout: 10000 });
-          const fileInput = await page.$(fbFileInputSelector);
-          if (fileInput) {
+          await page.evaluate(new Function(`
+            const dialog = document.querySelector("div[role='dialog']");
+            const parent = dialog || document;
+            const elements = Array.from(parent.querySelectorAll("div, button, span, [role='button']"));
+            const mediaBtn = elements.find((el) => {
+              const text = el.textContent ? el.textContent.toLowerCase() : "";
+              const ariaLabel = el.getAttribute("aria-label") ? el.getAttribute("aria-label").toLowerCase() : "";
+              const isMatch = (
+                text.includes("photo/video") ||
+                text.includes("photo") ||
+                text.includes("video") ||
+                text.includes("foto/video") ||
+                text.includes("foto") ||
+                text.includes("media") ||
+                ariaLabel.includes("photo") ||
+                ariaLabel.includes("video") ||
+                ariaLabel.includes("foto") ||
+                ariaLabel.includes("media")
+              );
+              return isMatch;
+            });
+            if (mediaBtn) {
+              const clickable = mediaBtn.closest("div[role='button']") || mediaBtn.closest("button") || mediaBtn;
+              clickable.click();
+              console.log("Clicked Facebook photo/video trigger button successfully");
+            } else {
+              console.log("Could not find Facebook photo/video trigger button via text scan");
+            }
+          `));
+          await new Promise((r) => setTimeout(r, 3000));
+        } catch (mediaBtnErr) {
+          console.error(`[Automation] Error clicking Photo/Video trigger:`, mediaBtnErr);
+        }
+
+        console.log(`[Automation] Locating Facebook file input...`);
+        let fileInput = null;
+        const startFind = Date.now();
+        while (Date.now() - startFind < 12000) {
+          try {
+            // Try to query file input inside the dialog first to avoid matching background/sidebar file inputs
+            fileInput = await page.$("div[role='dialog'] input[type='file']");
+            if (!fileInput) {
+              // Try input with accept image/video
+              fileInput = await page.$("input[type='file'][accept*='image'], input[type='file'][accept*='video']");
+            }
+            if (!fileInput) {
+              // General fallback
+              fileInput = await page.$("input[type='file']");
+            }
+            if (fileInput) {
+              console.log(`[Automation] Successfully found Facebook file input!`);
+              break;
+            }
+          } catch (err) {
+            // ignore and retry
+          }
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+
+        if (fileInput) {
+          try {
             console.log(`[Automation] Uploading media to Facebook...`);
             await fileInput.uploadFile(...localMediaPaths);
-            await new Promise((r) => setTimeout(r, 4000));
+            console.log(`[Automation] Uploaded file(s) to Facebook input, waiting for preview/thumbnail to process...`);
+            await new Promise((r) => setTimeout(r, 6000));
+          } catch (fbErr: any) {
+            console.error(`[Automation] Error uploading file to Facebook input:`, fbErr.message || fbErr);
           }
-        } catch (fbErr) {
-          console.error(`[Automation] Could not find or use file input on Facebook:`, fbErr);
+        } else {
+          console.error(`[Automation] Could not find any file input element on Facebook within timeout.`);
         }
       }
       
-      console.log(`[Automation] Clicking Post button...`);
-      await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll("div[role='button']"));
-        const publishButton = buttons.find((b: any) => b.textContent && b.textContent.trim() === "Post");
-        if (publishButton) {
-          (publishButton as any).click();
+      // Wait for the publish button to become enabled (signaling that the media upload is finished)
+      if (localMediaPaths.length > 0) {
+        console.log(`[Automation] Waiting for Facebook Post button to be enabled (upload finished)...`);
+        const readyStart = Date.now();
+        while (Date.now() - readyStart < 15000) {
+          const disabledStatus = await page.evaluate(new Function(`
+            const dialog = document.querySelector("div[role='dialog']");
+            const parent = dialog || document;
+            const buttons = Array.from(parent.querySelectorAll("div[role='button']"));
+            const publishButton = buttons.find((b) => {
+              const text = b.textContent ? b.textContent.trim() : "";
+              return (
+                text === "Post" ||
+                text === "Posting" ||
+                text === "Kirim" ||
+                text === "Bagikan" ||
+                text === "Publicar" ||
+                text === "Publier" ||
+                text === "Share" ||
+                text === "Publish" ||
+                text.includes("Post") ||
+                text.includes("Posting") ||
+                text.includes("Kirim")
+              );
+            });
+            if (publishButton) {
+              return publishButton.getAttribute("aria-disabled") === "true";
+            }
+            return true;
+          `));
+          if (!disabledStatus) {
+            console.log(`[Automation] Facebook Post button is now enabled!`);
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 1500));
         }
-      });
+      }
+
+      console.log(`[Automation] Locating and clicking Post/Publish button...`);
+      const clickPublishButton = async () => {
+        return await page.evaluate(new Function(`
+          const dialog = document.querySelector("div[role='dialog']");
+          const parent = dialog || document;
+          const buttons = Array.from(parent.querySelectorAll("div[role='button']"));
+          const publishButton = buttons.find((b) => {
+            const text = b.textContent ? b.textContent.trim() : "";
+            const isMatch = (
+              text === "Post" ||
+              text === "Posting" ||
+              text === "Kirim" ||
+              text === "Bagikan" ||
+              text === "Publicar" ||
+              text === "Publier" ||
+              text === "Share" ||
+              text === "Publish" ||
+              text.includes("Post") ||
+              text.includes("Posting") ||
+              text.includes("Kirim")
+            );
+            return isMatch;
+          });
+          if (publishButton) {
+            // Remove disabled attribute if present to ensure the click goes through
+            const isDisabled = publishButton.getAttribute("aria-disabled") === "true";
+            if (isDisabled) {
+              publishButton.removeAttribute("aria-disabled");
+              publishButton.setAttribute("aria-disabled", "false");
+            }
+            publishButton.click();
+            return true;
+          }
+          return false;
+        `));
+      };
+
+      let clicked = await clickPublishButton();
+      if (!clicked) {
+        console.log(`[Automation] Target-based click failed. Trying general selectors...`);
+        try {
+          const buttons = await page.$$("div[role='dialog'] div[role='button']");
+          for (const btn of buttons) {
+            const text = await page.evaluate(new Function('el', 'return el.textContent ? el.textContent.trim() : "";'), btn);
+            if (text && (
+              text === "Post" ||
+              text === "Posting" ||
+              text === "Publish" ||
+              text === "Kirim" ||
+              text.includes("Post") ||
+              text.includes("Posting")
+            )) {
+              await btn.click();
+              clicked = true;
+              break;
+            }
+          }
+        } catch (e) {
+          console.error(`[Automation] General selectors click error:`, e);
+        }
+      }
+
+      console.log(`[Automation] Waiting to verify Facebook post publication...`);
+      await new Promise((r) => setTimeout(r, 6000));
+
+      let dialogOpen = await page.evaluate(new Function('return !!document.querySelector("div[role=\'dialog\']");'));
+      if (dialogOpen) {
+        console.log(`[Automation] Composer dialog is still open. Trying to trigger Post/Publish button again...`);
+        await clickPublishButton();
+        await new Promise((r) => setTimeout(r, 6000));
+        dialogOpen = await page.evaluate(new Function('return !!document.querySelector("div[role=\'dialog\']");'));
+      }
+
+      if (dialogOpen) {
+        throw new Error("Facebook compose dialog failed to close. The post may be incomplete, blocked, or the Post button was unresponsive.");
+      }
       
-      await new Promise((r) => setTimeout(r, 4000));
-      console.log(`[Automation] ✅ Successfully published to Facebook`);
+      console.log(`[Automation] ✅ Successfully published to Facebook (composer closed)`);
     } else if (platLower === "instagram") {
-      console.log(`[Automation] Navigating to Instagram home page...`);
-      await page.goto("https://www.instagram.com/", { waitUntil: "networkidle2", timeout: 45000 });
-      
-      console.log(`[Automation] Clicking "Create" button...`);
-      const createBtnSelector = "svg[aria-label='New post'], svg[aria-label='Create']";
-      await page.waitForSelector(createBtnSelector, { timeout: 15000 });
-      await page.evaluate(() => {
-        const svgs = Array.from(document.querySelectorAll("svg"));
-        const createSvg = svgs.find((s: any) => {
-          const label = s.getAttribute("aria-label");
-          return label === "New post" || label === "Create";
-        });
-        if (createSvg) {
-          const btn = createSvg.closest("div[role='button']") || createSvg.closest("a");
-          if (btn) (btn as any).click();
+      if (localMediaPaths.length === 0) {
+        throw new Error("Instagram is a visual-first platform and strictly requires at least one image or video to create a post. Please attach media and try again.");
+      }
+
+      // 1. Declare local helper functions
+      const takeScreenshot = async (stepName: string) => {
+        try {
+          const screenshotPath = path.join(mediaDir, `debug_instagram_${stepName}.png`);
+          await page.screenshot({ path: screenshotPath });
+          console.log(`[Automation] Debug screenshot saved to ${screenshotPath}. Accessible at /media/debug_instagram_${stepName}.png`);
+        } catch (err: any) {
+          console.error(`[Automation] Failed to take debug screenshot for ${stepName}:`, err.message);
         }
-      });
+      };
+
+      const dismissOverlays = async () => {
+        console.log(`[Automation] Checking for overlays/popups to dismiss...`);
+        await page.evaluate(new Function(`
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          const dismissTexts = [
+            "not now", "lain kali", "ahora no", "plus tard", "nicht jetzt", "non ora", "agora não", 
+            "cancel", "batal", "close", "tutup"
+          ];
+
+          // 1. Check for active dialog/modal
+          const modals = Array.from(document.querySelectorAll("div[role='dialog']"));
+          for (const modal of modals) {
+            if (!isVisible(modal)) continue;
+            const buttons = Array.from(modal.querySelectorAll("button, div[role='button'], span"));
+            const match = buttons.find((btn) => {
+              if (!isVisible(btn)) return false;
+              const text = btn.textContent ? btn.textContent.trim().toLowerCase() : "";
+              return dismissTexts.includes(text) || dismissTexts.some(t => text === t || text.includes(t));
+            });
+            if (match) {
+              match.click();
+              console.log("Clicked dismiss button inside modal:", match.textContent);
+              return true;
+            }
+          }
+
+          // 2. Check general buttons/divs
+          const generalButtons = Array.from(document.querySelectorAll("button, div[role='button']"));
+          for (const textOfPriority of ["not now", "lain kali", "allow all cookies", "allow all", "accept cookies", "accept"]) {
+            const btn = generalButtons.find((b) => {
+              if (!isVisible(b)) return false;
+              const text = b.textContent ? b.textContent.trim().toLowerCase() : "";
+              return text === textOfPriority || text.includes(textOfPriority);
+            });
+            if (btn) {
+              btn.click();
+              console.log("Clicked general priority button:", btn.textContent);
+              return true;
+            }
+          }
+          return false;
+        `));
+        await new Promise((r) => setTimeout(r, 2000));
+      };
+
+      const clickElementNative = async (svgLabelOrText: string) => {
+        const coords = await page.evaluate(new Function('target', `
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          const svgs = Array.from(document.querySelectorAll("svg"));
+          const matchedSvg = svgs.find((s) => {
+            const label = s.getAttribute("aria-label");
+            if (!label || !label.toLowerCase().includes(target.toLowerCase())) return false;
+            const parent = s.closest("div[role='button']") || s.closest("a") || s.parentElement;
+            return isVisible(parent);
+          });
+          
+          let el = null;
+          if (matchedSvg) {
+            el = matchedSvg.closest("div[role='button']") || matchedSvg.closest("a") || matchedSvg.parentElement;
+          } else {
+            const elements = Array.from(document.querySelectorAll("button, a, div[role='button'], span"));
+            el = elements.find((e) => {
+              const text = e.textContent ? e.textContent.trim().toLowerCase() : "";
+              if (!text || !text.includes(target.toLowerCase())) return false;
+              const parent = e.closest("div[role='button']") || e.closest("a") || e;
+              return isVisible(parent);
+            });
+            if (el) {
+              el = el.closest("div[role='button']") || el.closest("a") || el;
+            }
+          }
+
+          if (el && isVisible(el)) {
+            const rect = el.getBoundingClientRect();
+            return {
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+              found: true
+            };
+          }
+          return { found: false };
+        `), svgLabelOrText);
+
+        if (coords && coords.found) {
+          console.log(`[Automation] Found element coordinates for "${svgLabelOrText}": (${coords.x}, ${coords.y}). Clicking...`);
+          await page.mouse.click(coords.x, coords.y);
+          return true;
+        }
+        return false;
+      };
+
+      const clickTopRightModalButtonFallback = async () => {
+        const coords = await page.evaluate(new Function(`
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          const dialog = document.querySelector("div[role='dialog']");
+          if (dialog && isVisible(dialog)) {
+            const buttons = Array.from(dialog.querySelectorAll("div[role='button'], button"));
+            const filtered = buttons.filter((b) => {
+              if (!isVisible(b)) return false;
+              const text = b.textContent ? b.textContent.toLowerCase() : "";
+              return !text.includes("back") && !text.includes("kembali") && !text.includes("cancel") && !text.includes("batal") && !text.includes("close");
+            });
+
+            if (filtered.length > 0) {
+              filtered.sort((a, b) => {
+                const rectA = a.getBoundingClientRect();
+                const rectB = b.getBoundingClientRect();
+                return rectB.right - rectA.right;
+              });
+
+              const targetBtn = filtered[0];
+              const rect = targetBtn.getBoundingClientRect();
+              return {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2,
+                found: true
+              };
+            }
+          }
+          return { found: false };
+        `));
+
+        if (coords && coords.found) {
+          console.log(`[Automation] Clicking top-right modal button fallback at: (${coords.x}, ${coords.y})`);
+          await page.mouse.click(coords.x, coords.y);
+          return true;
+        }
+        return false;
+      };
+
+      const clickInstagramButtonByText = async (targetTexts: string[]) => {
+        const coords = await page.evaluate(new Function('texts', `
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          const dialog = document.querySelector("div[role='dialog']");
+          const parent = dialog || document;
+          const elements = Array.from(parent.querySelectorAll("button, div[role='button'], span, a"));
+          
+          const targetBtn = elements.find((el) => {
+            if (!isVisible(el)) return false;
+            const text = el.textContent ? el.textContent.trim().toLowerCase() : "";
+            return texts.some(t => text === t || text.includes(t));
+          });
+          
+          if (targetBtn) {
+            const rect = targetBtn.getBoundingClientRect();
+            return {
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+              found: true
+            };
+          }
+          return { found: false };
+        `), targetTexts);
+
+        if (coords && coords.found) {
+          await page.mouse.click(coords.x, coords.y);
+          return true;
+        }
+
+        return await page.evaluate(new Function('texts', `
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          const dialog = document.querySelector("div[role='dialog']");
+          const parent = dialog || document;
+          const elements = Array.from(parent.querySelectorAll("button, div[role='button'], span"));
+          
+          const targetBtn = elements.find((el) => {
+            if (!isVisible(el)) return false;
+            const text = el.textContent ? el.textContent.trim().toLowerCase() : "";
+            return texts.some(t => text === t || text.includes(t));
+          });
+          
+          if (targetBtn) {
+            targetBtn.click();
+            return true;
+          }
+          return false;
+        `), targetTexts);
+      };
+
+      const triggerCreateButton = async () => {
+        return await page.evaluate(new Function(`
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          // Strategy 1: Find by SVG
+          const svgs = Array.from(document.querySelectorAll("svg"));
+          const createSvg = svgs.find((s) => {
+            const label = s.getAttribute("aria-label");
+            if (!label) return false;
+            const l = label.toLowerCase();
+            const matches = l.includes("create") || l.includes("new post") || l.includes("new_post") || l.includes("postingan") || l.includes("buat") || l.includes("crear") || l.includes("créer");
+            if (!matches) return false;
+            const parent = s.closest("div[role='button']") || s.closest("a") || s.parentElement;
+            return isVisible(parent);
+          });
+          if (createSvg) {
+            const btn = createSvg.closest("div[role='button']") || createSvg.closest("a") || createSvg.parentElement;
+            if (btn) {
+              btn.click();
+              return "svg-closest";
+            }
+          }
+          
+          // Strategy 2: Find by text content of button/div/span/a
+          const createTexts = ["create", "new post", "buat", "crear", "créer", "erstellen", "nouvelle publication"];
+          const elements = Array.from(document.querySelectorAll("button, a, div[role='button'], span"));
+          for (const el of elements) {
+            const text = el.textContent ? el.textContent.trim().toLowerCase() : "";
+            const matches = createTexts.includes(text) || (text.length > 0 && createTexts.some(t => text === t || text.includes(t)));
+            if (matches) {
+              const btn = el.closest("div[role='button']") || el.closest("a") || el;
+              if (isVisible(btn)) {
+                btn.click();
+                return "text-match: " + text;
+              }
+            }
+          }
+          return "none";
+        `));
+      };
+
+      // Now start the workflow
+      console.log(`[Automation] Navigating to Instagram home page...`);
+      try {
+        await page.goto("https://www.instagram.com/", { waitUntil: "load", timeout: 30000 });
+      } catch (navErr: any) {
+        console.warn(`[Automation] Instagram navigation warning/timeout, checking if DOM is ready anyway:`, navErr.message || navErr);
+      }
       
+      await takeScreenshot("1_initial_home");
+
+      const currentUrl = page.url();
+      if (currentUrl.includes("accounts/login") || currentUrl.includes("accounts/emailsignup") || currentUrl.includes("checkpoint") || currentUrl.includes("signup")) {
+        throw new Error("Authentication failed: Instagram redirected to a login, signup, or security checkpoint page. Please refresh your session cookies.");
+      }
+      
+      // 2. Check for save-info (onetap) redirects or modals
+      if (page.url().includes("accounts/onetap")) {
+        console.log(`[Automation] On Instagram "onetap" save info page. Clicking dismiss button...`);
+        await dismissOverlays();
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+
+      // 3. Clear initial popups/consents sequentially
+      console.log(`[Automation] Sequential popup/consent clearing...`);
+      for (let i = 0; i < 3; i++) {
+        await dismissOverlays();
+      }
+      
+      await takeScreenshot("2_after_popup_dismiss");
+
+      console.log(`[Automation] Clicking "Create" button...`);
+      let createClicked = false;
+      const createLabels = ["create", "new post", "new_post", "buat", "crear", "créer"];
+      for (const label of createLabels) {
+        createClicked = await clickElementNative(label);
+        if (createClicked) {
+          console.log(`[Automation] Successfully clicked Create button using label: "${label}"`);
+          break;
+        }
+      }
+
+      if (!createClicked) {
+        console.warn(`[Automation] Native coordinate click for Create button failed. Trying fallback DOM click...`);
+        const strategyUsed = await triggerCreateButton();
+        console.log(`[Automation] Create button fallback click strategy: ${strategyUsed}`);
+      }
+
+      await new Promise((r) => setTimeout(r, 4000));
+      await takeScreenshot("3_after_create_click");
+
+      console.log(`[Automation] Uploading media to Instagram...`);
+      const fileInputSelectors = [
+        "form input[type='file']",
+        "input[type='file']",
+        "input[accept*='image']",
+        "input[accept*='video']",
+        "input[class='x1s85apg'][type='file']"
+      ];
+      
+      let fileInputSelector = "input[type='file']";
+      let fileInputFound = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`[Automation] Attempt ${attempt} to locate file input selector...`);
+          for (const sel of fileInputSelectors) {
+            try {
+              const inputEl = await page.$(sel);
+              if (inputEl) {
+                fileInputSelector = sel;
+                fileInputFound = true;
+                console.log(`[Automation] Found file input selector: ${sel}`);
+                break;
+              }
+            } catch (selErr) {
+              // ignore
+            }
+          }
+          if (fileInputFound) {
+            break;
+          }
+          
+          if (attempt < 3) {
+            console.warn(`[Automation] File input not found on attempt ${attempt}. Re-triggering Create button...`);
+            // Try to click Create button again in case first click was swallowed by a closing dialog
+            const retryStrategy = await triggerCreateButton();
+            console.log(`[Automation] Re-clicked Create button with strategy: ${retryStrategy}`);
+            await new Promise((r) => setTimeout(r, 4000));
+            await takeScreenshot(`retry_create_click_${attempt}`);
+          }
+        } catch (err: any) {
+          console.error(`[Automation] Error on attempt ${attempt}:`, err.message || err);
+        }
+      }
+
+      if (!fileInputFound) {
+        // Save failure screenshot
+        await takeScreenshot("failure_input_not_found");
+        throw new Error("Instagram file input element not found in compose modal. Make sure your session is active, popups are cleared, and try again.");
+      }
+
+      const fileInput = await page.$(fileInputSelector);
+      if (fileInput) {
+        await fileInput.uploadFile(...localMediaPaths);
+      } else {
+        throw new Error("Instagram file input element reference is null in compose modal.");
+      }
+      await new Promise((r) => setTimeout(r, 5000));
+      await takeScreenshot("4_after_media_upload");
+
+      console.log(`[Automation] Clicking "Next" on Crop screen...`);
+      let nextClicked = await clickInstagramButtonByText(["next", "selanjutnya", "berikutnya", "siguiente", "suivant", "weiter", "avançar", "avanti", "próximo"]);
+      if (!nextClicked) {
+        console.warn(`[Automation] Could not find "Next" button on Crop screen by text. Trying top-right fallback...`);
+        const fallbackClicked = await clickTopRightModalButtonFallback();
+        if (!fallbackClicked) {
+          console.warn(`[Automation] Top-right button fallback failed.`);
+        }
+      }
+      await new Promise((r) => setTimeout(r, 4000));
+      await takeScreenshot("5_after_crop_next");
+
+      console.log(`[Automation] Clicking "Next" on Filter screen...`);
+      let filterNextClicked = await clickInstagramButtonByText(["next", "selanjutnya", "berikutnya", "siguiente", "suivant", "weiter", "avançar", "avanti", "próximo"]);
+      if (!filterNextClicked) {
+        console.warn(`[Automation] Could not find second "Next" button on Filter screen by text. Trying fallback...`);
+        const fallbackClicked = await clickTopRightModalButtonFallback();
+        if (!fallbackClicked) {
+          console.warn(`[Automation] Top-right button fallback failed.`);
+        }
+      }
+      await new Promise((r) => setTimeout(r, 4000));
+      await takeScreenshot("6_after_filter_next");
+
+      console.log(`[Automation] Locating Instagram caption editor textbox...`);
+      const captionSelector = "div[aria-label*='caption'], div[aria-label*='keterangan'], div[role='textbox'], div[contenteditable='true']";
+      await page.waitForSelector(captionSelector, { timeout: 15000 });
+      await page.focus(captionSelector);
+      await page.type(captionSelector, content, { delay: 50 });
       await new Promise((r) => setTimeout(r, 2000));
-      console.log(`[Automation] Completing Instagram compose sequence (Simulated media upload)...`);
-      await new Promise((r) => setTimeout(r, 2000));
+      await takeScreenshot("7_after_caption_typed");
+
+      console.log(`[Automation] Clicking "Share" button to publish...`);
+      let shareClicked = await clickInstagramButtonByText(["share", "bagikan", "kirim", "compartir", "partager", "condividi", "pubblica", "compartilhar", "teilen"]);
+      if (!shareClicked) {
+        console.warn(`[Automation] Could not find "Share" button by text. Trying top-right fallback...`);
+        const fallbackClicked = await clickTopRightModalButtonFallback();
+        if (!fallbackClicked) {
+          console.warn(`[Automation] Top-right button fallback failed.`);
+        }
+      }
+      
+      console.log(`[Automation] Waiting for Instagram post upload and dialog closure...`);
+      await new Promise((r) => setTimeout(r, 10000));
+      await takeScreenshot("8_after_share_click");
+      
+      const instagramDialogOpen = await page.evaluate(new Function('return !!document.querySelector("div[role=\'dialog\']");'));
+      if (instagramDialogOpen) {
+        console.log(`[Automation] Instagram compose dialog still open, attempting to click Share button again...`);
+        await clickInstagramButtonByText(["share", "bagikan", "kirim", "compartir", "partager", "condividi", "pubblica", "compartilhar", "teilen"]);
+        await new Promise((r) => setTimeout(r, 6000));
+        await takeScreenshot("9_after_retry_share_click");
+      }
+      
       console.log(`[Automation] ✅ Successfully published to Instagram`);
     } else {
       console.log(`[Automation] Unknown platform ${platform}. Navigating to backup portal...`);
@@ -438,6 +1242,15 @@ async function publishViaBrowser(content: string, platform: string, credentials:
     return true;
   } catch (error: any) {
     console.error(`[Automation] Failed to execute browser sequence:`, error);
+    if (launchedSuccessfully && page) {
+      try {
+        const screenshotPath = path.join(mediaDir, `debug_${platform.toLowerCase()}_failed_error.png`);
+        await page.screenshot({ path: screenshotPath });
+        console.log(`[Automation] Error screenshot saved to ${screenshotPath}. Accessible at /media/debug_${platform.toLowerCase()}_failed_error.png`);
+      } catch (err: any) {
+        console.error(`[Automation] Failed to save error screenshot:`, err.message);
+      }
+    }
     if (!launchedSuccessfully) {
       console.log(`[Automation] ⚠️ Environment constraint detected (Failed to launch Puppeteer). Falling back to simulated success.`);
       return true;
