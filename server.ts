@@ -226,11 +226,30 @@ async function publishViaBrowser(content: string, platform: string, credentials:
     }
 
     browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--lang=en-US,en"
+      ],
       headless: true,
     });
     launchedSuccessfully = true;
     page = await browser.newPage();
+    
+    // Force English language headers
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "en-US,en;q=0.9"
+    });
+
+    // Override navigator.language to always enforce English
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "language", {
+        get: () => "en-US",
+      });
+      Object.defineProperty(navigator, "languages", {
+        get: () => ["en-US", "en"],
+      });
+    });
     
     // Set standard desktop User-Agent and viewport to avoid simple bot detection
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
@@ -818,12 +837,29 @@ async function publishViaBrowser(content: string, platform: string, credentials:
             return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
           };
 
+          // 1. Check for special Instagram popup/not-now button classes first (independent of language)
+          const specSelectors = [
+            "button._a9--._a9_1",
+            "button._a9_1",
+            "._a9_1",
+            "button[class*='_a9_1']",
+            "button[class*='_a9--'][class*='_a9_1']"
+          ];
+          for (const sel of specSelectors) {
+            const specBtn = document.querySelector(sel);
+            if (specBtn && isVisible(specBtn)) {
+              specBtn.click();
+              console.log("Clicked Instagram special dismiss button via selector:", sel);
+              return true;
+            }
+          }
+
           const dismissTexts = [
-            "not now", "lain kali", "ahora no", "plus tard", "nicht jetzt", "non ora", "agora não", 
+            "not now", "lain kali", "jangan sekarang", "nanti", "ahora no", "plus tard", "nicht jetzt", "non ora", "agora não", 
             "cancel", "batal", "close", "tutup"
           ];
 
-          // 1. Check for active dialog/modal
+          // 2. Check for active dialog/modal
           const modals = Array.from(document.querySelectorAll("div[role='dialog']"));
           for (const modal of modals) {
             if (!isVisible(modal)) continue;
@@ -840,9 +876,16 @@ async function publishViaBrowser(content: string, platform: string, credentials:
             }
           }
 
-          // 2. Check general buttons/divs
-          const generalButtons = Array.from(document.querySelectorAll("button, div[role='button']"));
-          for (const textOfPriority of ["not now", "lain kali", "allow all cookies", "allow all", "accept cookies", "accept"]) {
+          // 3. Check general buttons/divs/spans/a tags (for cookie banner and alert notices)
+          const generalButtons = Array.from(document.querySelectorAll("button, div[role='button'], span, a"));
+          const cookieTexts = [
+            "allow all cookies", "allow all", "accept cookies", "accept", "agree", "allow", "decline", "cookies", 
+            "izinkan semua cookie", "terima semua cookie", "terima semua", "terima", "izinkan", "setuju", "setujui semua", "tolak",
+            "aceptar todos", "aceptar todas", "accepter tous", "accepter tout", "autoriser tous", "permitir todos", "akzeptieren",
+            "allow essential and optional cookies", "decline optional cookies", "not now", "lain kali", "jangan sekarang"
+          ];
+
+          for (const textOfPriority of cookieTexts) {
             const btn = generalButtons.find((b) => {
               if (!isVisible(b)) return false;
               const text = b.textContent ? b.textContent.trim().toLowerCase() : "";
@@ -850,7 +893,7 @@ async function publishViaBrowser(content: string, platform: string, credentials:
             });
             if (btn) {
               btn.click();
-              console.log("Clicked general priority button:", btn.textContent);
+              console.log("Clicked general priority/cookie button:", btn.textContent);
               return true;
             }
           }
@@ -924,22 +967,51 @@ async function publishViaBrowser(content: string, platform: string, credentials:
 
           const dialog = document.querySelector("div[role='dialog']");
           if (dialog && isVisible(dialog)) {
-            const buttons = Array.from(dialog.querySelectorAll("div[role='button'], button"));
-            const filtered = buttons.filter((b) => {
-              if (!isVisible(b)) return false;
-              const text = b.textContent ? b.textContent.toLowerCase() : "";
-              return !text.includes("back") && !text.includes("kembali") && !text.includes("cancel") && !text.includes("batal") && !text.includes("close");
-            });
+            const dialogRect = dialog.getBoundingClientRect();
+            
+            // Define header-right zone (top 80px, right 45% of the active dialog)
+            const zoneTop = dialogRect.top;
+            const zoneBottom = dialogRect.top + 80;
+            const zoneLeft = dialogRect.left + (dialogRect.width * 0.55);
+            const zoneRight = dialogRect.right;
 
-            if (filtered.length > 0) {
-              filtered.sort((a, b) => {
-                const rectA = a.getBoundingClientRect();
-                const rectB = b.getBoundingClientRect();
-                return rectB.right - rectA.right;
+            const candidates = [];
+            const allEls = Array.from(dialog.querySelectorAll("button, div, span, a, p, [role='button']"));
+            for (const el of allEls) {
+              if (!isVisible(el)) continue;
+              const rect = el.getBoundingClientRect();
+              
+              // Get center coordinates of this element
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
+              
+              if (cx >= zoneLeft && cx <= zoneRight && cy >= zoneTop && cy <= zoneBottom) {
+                const text = el.textContent ? el.textContent.trim().toLowerCase() : "";
+                if (text.includes("back") || text.includes("kembali") || text.includes("cancel") || text.includes("batal") || text.includes("close")) {
+                  continue;
+                }
+                candidates.push({ el, rect, text });
+              }
+            }
+
+            if (candidates.length > 0) {
+              // Sort by horizontal center position descending (rightmost element first)
+              candidates.sort((a, b) => {
+                const centerA = a.rect.left + a.rect.width / 2;
+                const centerB = b.rect.left + b.rect.width / 2;
+                return centerB - centerA;
               });
 
-              const targetBtn = filtered[0];
-              const rect = targetBtn.getBoundingClientRect();
+              // Prefer elements with some text content or buttons
+              let bestCandidate = candidates[0];
+              for (const c of candidates) {
+                if (c.text.length > 0) {
+                  bestCandidate = c;
+                  break;
+                }
+              }
+
+              const rect = bestCandidate.rect;
               return {
                 x: rect.left + rect.width / 2,
                 y: rect.top + rect.height / 2,
@@ -953,12 +1025,73 @@ async function publishViaBrowser(content: string, platform: string, credentials:
         if (coords && coords.found) {
           console.log(`[Automation] Clicking top-right modal button fallback at: (${coords.x}, ${coords.y})`);
           await page.mouse.click(coords.x, coords.y);
+          
+          // Also trigger a direct DOM click on the elements at those coordinates
+          await page.evaluate(new Function('x', 'y', `
+            try {
+              const el = document.elementFromPoint(x, y);
+              if (el) {
+                let current = el;
+                let levels = 0;
+                while (current && levels < 5) {
+                  try {
+                    current.click();
+                  } catch(e){}
+                  current = current.parentElement;
+                  levels++;
+                }
+              }
+            } catch(e){}
+          `), coords.x, coords.y);
           return true;
         }
         return false;
       };
 
       const clickInstagramButtonByText = async (targetTexts: string[]) => {
+        // Try exact xpath and relaxed versions of the xpath first if any of targetTexts is "next" or "share"
+        const isNextOrShare = targetTexts.includes("next") || targetTexts.includes("share");
+        if (isNextOrShare) {
+          console.log(`[Automation] Attempting to find Next/Share using custom/user-provided XPaths...`);
+          const xpathList = [
+            "/html/body/div[5]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[1]/div/div/div/div[3]/div/div", // Exact user-provided
+            "/html/body/div[6]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[1]/div/div/div/div[3]/div/div", // user-provided offset 6
+            "/html/body/div[4]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[1]/div/div/div/div[3]/div/div", // user-provided offset 4
+            "/html/body/div[3]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[1]/div/div/div/div[3]/div/div", // user-provided offset 3
+            "/html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[1]/div/div/div/div[3]/div/div", // user-provided offset 7
+            // Relative to dialog
+            "//div[@role='dialog']//div[1]/div/div/div/div[3]/div/div",
+            "//div[@role='dialog']//div[1]/div/div/div/div[3]/div",
+            "//div[@role='dialog']//div/div/div/div/div/div/div/div[1]/div/div/div/div[3]/div/div"
+          ];
+          for (const xp of xpathList) {
+            const clicked = await page.evaluate(new Function('xp', `
+              try {
+                const result = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                const el = result.singleNodeValue;
+                if (el) {
+                  console.log("[Browser] Found and clicking element by XPath:", xp);
+                  let current = el;
+                  let levels = 0;
+                  while (current && levels < 4) {
+                    try {
+                      current.click();
+                    } catch (e) {}
+                    current = current.parentElement;
+                    levels++;
+                  }
+                  return true;
+                }
+              } catch (e) {}
+              return false;
+            `), xp);
+            if (clicked) {
+              console.log(`[Automation] Successfully clicked Next/Share button via XPath fallback: ${xp}`);
+              return true;
+            }
+          }
+        }
+
         const coords = await page.evaluate(new Function('texts', `
           const isVisible = (el) => {
             if (!el) return false;
@@ -970,7 +1103,7 @@ async function publishViaBrowser(content: string, platform: string, credentials:
 
           const dialog = document.querySelector("div[role='dialog']");
           const parent = dialog || document;
-          const elements = Array.from(parent.querySelectorAll("button, div[role='button'], span, a"));
+          const elements = Array.from(parent.querySelectorAll("button, div, span, a, p, [role='button']"));
           
           const targetBtn = elements.find((el) => {
             if (!isVisible(el)) return false;
@@ -991,6 +1124,35 @@ async function publishViaBrowser(content: string, platform: string, credentials:
 
         if (coords && coords.found) {
           await page.mouse.click(coords.x, coords.y);
+          // Also try direct click after mouse click to ensure event trigger stability
+          await page.evaluate(new Function('texts', `
+            const isVisible = (el) => {
+              if (!el) return false;
+              const rect = el.getBoundingClientRect();
+              if (rect.width === 0 || rect.height === 0) return false;
+              const style = window.getComputedStyle(el);
+              return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+            };
+            const dialog = document.querySelector("div[role='dialog']");
+            const parent = dialog || document;
+            const elements = Array.from(parent.querySelectorAll("button, div, span, a, p, [role='button']"));
+            const targetBtn = elements.find((el) => {
+              if (!isVisible(el)) return false;
+              const text = el.textContent ? el.textContent.trim().toLowerCase() : "";
+              return texts.some(t => text === t || text.includes(t));
+            });
+            if (targetBtn) {
+              let current = targetBtn;
+              let levels = 0;
+              while (current && levels < 4) {
+                try {
+                  current.click();
+                } catch (e) {}
+                current = current.parentElement;
+                levels++;
+              }
+            }
+          `), targetTexts);
           return true;
         }
 
@@ -1005,7 +1167,7 @@ async function publishViaBrowser(content: string, platform: string, credentials:
 
           const dialog = document.querySelector("div[role='dialog']");
           const parent = dialog || document;
-          const elements = Array.from(parent.querySelectorAll("button, div[role='button'], span"));
+          const elements = Array.from(parent.querySelectorAll("button, div, span, a, p, [role='button']"));
           
           const targetBtn = elements.find((el) => {
             if (!isVisible(el)) return false;
@@ -1014,7 +1176,15 @@ async function publishViaBrowser(content: string, platform: string, credentials:
           });
           
           if (targetBtn) {
-            targetBtn.click();
+            let current = targetBtn;
+            let levels = 0;
+            while (current && levels < 4) {
+              try {
+                current.click();
+              } catch (e) {}
+              current = current.parentElement;
+              levels++;
+            }
             return true;
           }
           return false;
@@ -1031,6 +1201,18 @@ async function publishViaBrowser(content: string, platform: string, credentials:
             return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
           };
 
+          const clickAllTheWayUp = (element) => {
+            let current = element;
+            let levels = 0;
+            while (current && levels < 5) {
+              try {
+                current.click();
+              } catch (e) {}
+              current = current.parentElement;
+              levels++;
+            }
+          };
+
           // Strategy 1: Find by SVG
           const svgs = Array.from(document.querySelectorAll("svg"));
           const createSvg = svgs.find((s) => {
@@ -1045,27 +1227,125 @@ async function publishViaBrowser(content: string, platform: string, credentials:
           if (createSvg) {
             const btn = createSvg.closest("div[role='button']") || createSvg.closest("a") || createSvg.parentElement;
             if (btn) {
-              btn.click();
+              clickAllTheWayUp(btn);
               return "svg-closest";
             }
           }
           
           // Strategy 2: Find by text content of button/div/span/a
-          const createTexts = ["create", "new post", "buat", "crear", "créer", "erstellen", "nouvelle publication"];
-          const elements = Array.from(document.querySelectorAll("button, a, div[role='button'], span"));
+          const createTexts = ["create", "new post", "buat", "crear", "créer", "erstellen", "nouvelle publication", "postingan baru", "buat postingan"];
+          const elements = Array.from(document.querySelectorAll("button, a, div[role='button'], span, p"));
           for (const el of elements) {
             const text = el.textContent ? el.textContent.trim().toLowerCase() : "";
             const matches = createTexts.includes(text) || (text.length > 0 && createTexts.some(t => text === t || text.includes(t)));
             if (matches) {
               const btn = el.closest("div[role='button']") || el.closest("a") || el;
               if (isVisible(btn)) {
-                btn.click();
+                clickAllTheWayUp(btn);
                 return "text-match: " + text;
               }
             }
           }
+
+          // Strategy 3: Find by aria-label or title attribute of any element
+          const allElements = Array.from(document.querySelectorAll("*"));
+          const createAttrTexts = ["create", "new post", "new_post", "buat", "crear", "créer", "postingan baru", "buat postingan"];
+          const matchedAttrEl = allElements.find((el) => {
+            const ariaLabel = el.getAttribute("aria-label") ? el.getAttribute("aria-label").toLowerCase() : "";
+            const title = el.getAttribute("title") ? el.getAttribute("title").toLowerCase() : "";
+            const hasMatch = createAttrTexts.some(t => ariaLabel.includes(t) || title.includes(t));
+            return hasMatch && isVisible(el);
+          });
+          if (matchedAttrEl) {
+            clickAllTheWayUp(matchedAttrEl);
+            return "aria-label/title-match: " + (matchedAttrEl.getAttribute("aria-label") || matchedAttrEl.getAttribute("title"));
+          }
+
           return "none";
         `));
+      };
+
+      const emulateDragAndDropFiles = async (targetSelector: string, paths: string[]) => {
+        console.log(`[Automation] Emulating drag and drop for files: ${paths.join(", ")}`);
+        
+        await page.evaluate(new Function(`
+          const existing = document.getElementById('puppeteer-drag-drop-input');
+          if (existing) existing.remove();
+
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.id = 'puppeteer-drag-drop-input';
+          input.multiple = true;
+          input.style.position = 'fixed';
+          input.style.top = '0';
+          input.style.left = '0';
+          input.style.opacity = '0.001';
+          input.style.pointerEvents = 'none';
+          input.style.zIndex = '999999';
+          document.body.appendChild(input);
+        `));
+
+        const dummyHandle = await page.$("#puppeteer-drag-drop-input");
+        if (!dummyHandle) {
+          throw new Error("Failed to create dummy file input for drag and drop.");
+        }
+        await dummyHandle.uploadFile(...paths);
+
+        const dropSuccess = await page.evaluate(new Function('sel', `
+          const dummy = document.getElementById('puppeteer-drag-drop-input');
+          if (!dummy || !dummy.files || dummy.files.length === 0) {
+            console.error("No files found on dummy input");
+            return false;
+          }
+
+          const files = Array.from(dummy.files);
+          console.log("[Browser] Found " + files.length + " files in dummy input. Dispatching drop...");
+
+          let target = document.querySelector(sel);
+          if (!target) {
+            target = document.querySelector("div[role='dialog']") || document.body;
+          }
+
+          if (!target) {
+            console.error("No target element found for drop event");
+            return false;
+          }
+
+          const createDataTransfer = (fileList) => {
+            const dt = new DataTransfer();
+            for (const file of fileList) {
+              dt.items.add(file);
+            }
+            return dt;
+          };
+
+          const dragEnterEvent = new DragEvent("dragenter", {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: createDataTransfer(files),
+          });
+          target.dispatchEvent(dragEnterEvent);
+
+          const dragOverEvent = new DragEvent("dragover", {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: createDataTransfer(files),
+          });
+          target.dispatchEvent(dragOverEvent);
+
+          const dropEvent = new DragEvent("drop", {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: createDataTransfer(files),
+          });
+          target.dispatchEvent(dropEvent);
+
+          console.log("[Browser] Drag & Drop events dispatched successfully on target:", target);
+          dummy.remove();
+          return true;
+        `), targetSelector);
+
+        return dropSuccess;
       };
 
       // Now start the workflow
@@ -1129,6 +1409,8 @@ async function publishViaBrowser(content: string, platform: string, credentials:
       
       let fileInputSelector = "input[type='file']";
       let fileInputFound = false;
+      let dragAndDropSuccess = false;
+
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           console.log(`[Automation] Attempt ${attempt} to locate file input selector...`);
@@ -1163,49 +1445,224 @@ async function publishViaBrowser(content: string, platform: string, credentials:
       }
 
       if (!fileInputFound) {
+        console.log(`[Automation] Standard file input not found. Attempting drag-and-drop emulation...`);
+        try {
+          dragAndDropSuccess = await emulateDragAndDropFiles("div[role='dialog']", localMediaPaths);
+          if (dragAndDropSuccess) {
+            console.log(`[Automation] Drag-and-drop emulation completed successfully!`);
+          } else {
+            console.warn(`[Automation] Drag-and-drop emulation returned false.`);
+          }
+        } catch (dragErr: any) {
+          console.error(`[Automation] Drag-and-drop emulation failed:`, dragErr.message || dragErr);
+        }
+      }
+
+      if (!fileInputFound && !dragAndDropSuccess) {
         // Save failure screenshot
         await takeScreenshot("failure_input_not_found");
-        throw new Error("Instagram file input element not found in compose modal. Make sure your session is active, popups are cleared, and try again.");
+        throw new Error("Instagram file input element not found and drag-and-drop emulation failed. Make sure your session is active, popups are cleared, and try again.");
       }
 
-      const fileInput = await page.$(fileInputSelector);
-      if (fileInput) {
-        await fileInput.uploadFile(...localMediaPaths);
-      } else {
-        throw new Error("Instagram file input element reference is null in compose modal.");
+      if (fileInputFound) {
+        const fileInput = await page.$(fileInputSelector);
+        if (fileInput) {
+          await fileInput.uploadFile(...localMediaPaths);
+        } else {
+          throw new Error("Instagram file input element reference is null in compose modal.");
+        }
       }
-      await new Promise((r) => setTimeout(r, 5000));
+
+      await new Promise((r) => setTimeout(r, 6000));
       await takeScreenshot("4_after_media_upload");
 
-      console.log(`[Automation] Clicking "Next" on Crop screen...`);
-      let nextClicked = await clickInstagramButtonByText(["next", "selanjutnya", "berikutnya", "siguiente", "suivant", "weiter", "avançar", "avanti", "próximo"]);
-      if (!nextClicked) {
-        console.warn(`[Automation] Could not find "Next" button on Crop screen by text. Trying top-right fallback...`);
-        const fallbackClicked = await clickTopRightModalButtonFallback();
-        if (!fallbackClicked) {
-          console.warn(`[Automation] Top-right button fallback failed.`);
+      console.log(`[Automation] Transitioning to Caption screen (requires clicking "Next" transitions)...`);
+      let captionScreenReached = false;
+      const maxNextClicks = 4; // Allow up to 4 attempts to click Next/fallback transition
+      
+      for (let i = 1; i <= maxNextClicks; i++) {
+        console.log(`[Automation] Transition loop: checking if Caption screen is active (attempt ${i}/${maxNextClicks})...`);
+        
+        const hasCaption = await page.evaluate(new Function(`
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+          
+          const box = document.querySelector("div[role='textbox']") || 
+                      document.querySelector("div[data-lexical-editor='true']") || 
+                      document.querySelector("div[contenteditable='true']") ||
+                      document.querySelector("[aria-label*='caption']") ||
+                      document.querySelector("[aria-label*='keterangan']");
+          return !!(box && isVisible(box));
+        `));
+
+        if (hasCaption) {
+          console.log(`[Automation] Caption screen reached successfully!`);
+          captionScreenReached = true;
+          break;
+        }
+
+        console.log(`[Automation] Caption screen not active yet. Clicking "Next" transition button...`);
+        let nextClicked = await clickInstagramButtonByText(["next", "selanjutnya", "berikutnya", "siguiente", "suivant", "weiter", "avançar", "avanti", "próximo"]);
+        if (!nextClicked) {
+          console.warn(`[Automation] Could not find "Next" button on current screen by text. Trying top-right fallback...`);
+          const fallbackClicked = await clickTopRightModalButtonFallback();
+          if (!fallbackClicked) {
+            console.warn(`[Automation] Top-right button fallback failed.`);
+          }
+        }
+        
+        // Wait 4-5 seconds for transition to settle
+        await new Promise((r) => setTimeout(r, 4500));
+        await takeScreenshot(`transition_step_${i}`);
+      }
+
+      if (!captionScreenReached) {
+        console.log(`[Automation] Finished transition loop. Checking final Caption screen status...`);
+        const finalHasCaption = await page.evaluate(new Function(`
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+          
+          const box = document.querySelector("div[role='textbox']") || 
+                      document.querySelector("div[data-lexical-editor='true']") || 
+                      document.querySelector("div[contenteditable='true']") ||
+                      document.querySelector("[aria-label*='caption']") ||
+                      document.querySelector("[aria-label*='keterangan']");
+          return !!(box && isVisible(box));
+        `));
+        if (finalHasCaption) {
+          captionScreenReached = true;
+          console.log(`[Automation] Final check: Caption screen is active.`);
         }
       }
-      await new Promise((r) => setTimeout(r, 4000));
-      await takeScreenshot("5_after_crop_next");
 
-      console.log(`[Automation] Clicking "Next" on Filter screen...`);
-      let filterNextClicked = await clickInstagramButtonByText(["next", "selanjutnya", "berikutnya", "siguiente", "suivant", "weiter", "avançar", "avanti", "próximo"]);
-      if (!filterNextClicked) {
-        console.warn(`[Automation] Could not find second "Next" button on Filter screen by text. Trying fallback...`);
-        const fallbackClicked = await clickTopRightModalButtonFallback();
-        if (!fallbackClicked) {
-          console.warn(`[Automation] Top-right button fallback failed.`);
+      console.log(`[Automation] Waiting for Instagram caption editor textbox to appear...`);
+      let targetCaptionData: { id: string; x: number; y: number } | null = null;
+      const startTime = Date.now();
+      const timeoutMs = 15000;
+
+      while (Date.now() - startTime < timeoutMs) {
+        const result = await page.evaluate(new Function(`
+          const isVisible = (el) => {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          };
+
+          // Try precise queries first based on user instruction
+          const searchQueries = [
+            "div[aria-label='Write a caption...'][role='textbox'][contenteditable='true']",
+            "div[aria-label*='caption'][role='textbox'][contenteditable='true']",
+            "div[aria-label*='keterangan'][role='textbox'][contenteditable='true']",
+            "div[role='textbox'][contenteditable='true']",
+            "div[contenteditable='true'][data-lexical-editor='true']",
+            "div[aria-label*='caption'][contenteditable='true']",
+            "div[aria-label*='keterangan'][contenteditable='true']",
+            "div[contenteditable='true']",
+            "div[role='textbox']"
+          ];
+
+          let foundEl = null;
+
+          // 1. Try finding via specific xpath first (user-provided)
+          const xpaths = [
+            "/html/body/div[5]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[2]/div[2]/div/div/div/div/div[2]/div/div[1]/div[1]",
+            "/html/body/div[6]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[2]/div[2]/div/div/div/div/div[2]/div/div[1]/div[1]",
+            "/html/body/div[4]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[2]/div[2]/div/div/div/div/div[2]/div/div[1]/div[1]",
+            "/html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div/div/div/div[2]/div[2]/div/div/div/div/div[2]/div/div[1]/div[1]"
+          ];
+
+          for (const xp of xpaths) {
+            try {
+              const res = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+              const el = res.singleNodeValue;
+              if (el && isVisible(el)) {
+                console.log("[Browser] Found visible caption via precise XPath:", xp);
+                foundEl = el;
+                break;
+              }
+            } catch (e) {}
+          }
+
+          // 2. Try queries
+          if (!foundEl) {
+            for (const q of searchQueries) {
+              try {
+                const el = document.querySelector(q);
+                if (el && isVisible(el)) {
+                  console.log("[Browser] Found visible caption via query selector:", q);
+                  foundEl = el;
+                  break;
+                }
+              } catch (e) {}
+            }
+          }
+
+          // 3. Fallback to broad dialog search if still not found
+          if (!foundEl) {
+            try {
+              const dialog = document.querySelector("div[role='dialog']");
+              const parent = dialog || document;
+              // Search for any div with contenteditable and role textbox
+              const el = parent.querySelector("div[contenteditable='true']") || 
+                         parent.querySelector("div[role='textbox']") || 
+                         parent.querySelector("div[data-lexical-editor='true']");
+              if (el && isVisible(el)) {
+                console.log("[Browser] Found visible caption via broad fallback in dialog:", el);
+                foundEl = el;
+              }
+            } catch (e) {}
+          }
+
+          if (foundEl) {
+            foundEl.setAttribute("id", "target-insta-caption-editor");
+            const rect = foundEl.getBoundingClientRect();
+            return {
+              id: "#target-insta-caption-editor",
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2
+            };
+          }
+
+          return null;
+        `));
+
+        if (result) {
+          targetCaptionData = result as { id: string; x: number; y: number };
+          break;
         }
+        await new Promise((r) => setTimeout(r, 500));
       }
-      await new Promise((r) => setTimeout(r, 4000));
-      await takeScreenshot("6_after_filter_next");
 
-      console.log(`[Automation] Locating Instagram caption editor textbox...`);
-      const captionSelector = "div[aria-label*='caption'], div[aria-label*='keterangan'], div[role='textbox'], div[contenteditable='true']";
-      await page.waitForSelector(captionSelector, { timeout: 15000 });
-      await page.focus(captionSelector);
-      await page.type(captionSelector, content, { delay: 50 });
+      if (targetCaptionData) {
+        console.log(`[Automation] Focusing caption box: ${targetCaptionData.id}`);
+        await page.focus(targetCaptionData.id);
+        
+        console.log(`[Automation] Clicking caption box center at: (${targetCaptionData.x}, ${targetCaptionData.y})`);
+        await page.mouse.click(targetCaptionData.x, targetCaptionData.y);
+        await new Promise((r) => setTimeout(r, 1000));
+        
+        console.log(`[Automation] Triggering secondary click on DOM selector to ensure focus: ${targetCaptionData.id}`);
+        await page.click(targetCaptionData.id);
+        await new Promise((r) => setTimeout(r, 1000));
+        
+        console.log(`[Automation] Typing caption content via keyboard emulation...`);
+        await page.keyboard.type(content, { delay: 60 });
+      } else {
+        console.error(`[Automation] Could not find any caption input element!`);
+        throw new Error("Instagram caption input textbox not found. Please verify the active session state or modal screen transition.");
+      }
       await new Promise((r) => setTimeout(r, 2000));
       await takeScreenshot("7_after_caption_typed");
 
