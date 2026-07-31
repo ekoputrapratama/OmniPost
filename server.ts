@@ -12,6 +12,7 @@ import { publishToTwitter } from "./server/automation/twitter";
 import { publishToLinkedIn } from "./server/automation/linkedin";
 import { publishToFacebook } from "./server/automation/facebook";
 import { publishToInstagram } from "./server/automation/instagram";
+import { publishToBluesky } from "./server/automation/bluesky";
 import { 
   getFirestore, 
   collection as fsCollection, 
@@ -229,6 +230,12 @@ async function publishViaBrowser(content: string, platform: string, credentials:
       }
     }
 
+    if (platform.toLowerCase() === "bluesky") {
+      console.log(`[Automation] Bluesky platform detected. Publishing directly via AT Protocol API...`);
+      await publishToBluesky(content, credentials, localMediaPaths);
+      return true;
+    }
+
     browser = await puppeteer.launch({
       args: [
         "--no-sandbox",
@@ -411,7 +418,7 @@ async function publishViaBrowser(content: string, platform: string, credentials:
     if (platLower === "twitter" || platLower === "x") {
       await publishToTwitter(page, content, localMediaPaths);
     } else if (platLower === "linkedin") {
-      await publishToLinkedIn(page, content, localMediaPaths);
+      await publishToLinkedIn(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "facebook") {
       await publishToFacebook(page, content, localMediaPaths);
     } else if (platLower === "instagram") {

@@ -44,7 +44,7 @@ import {
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
-const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram"];
+const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram", "Bluesky"];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -883,7 +883,13 @@ export default function App() {
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Platform</label>
                     <select 
                       value={connectPlatform}
-                      onChange={(e) => setConnectPlatform(e.target.value)}
+                      onChange={(e) => {
+                        const plat = e.target.value;
+                        setConnectPlatform(plat);
+                        if (plat === "Bluesky") {
+                          setConnectMethod("credentials");
+                        }
+                      }}
                       className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50"
                     >
                       {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -891,28 +897,32 @@ export default function App() {
                   </div>
                   
                   <div className="flex gap-2 p-1 bg-black/40 border border-white/5 rounded-lg mb-4 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setConnectMethod("desktop_app")}
-                      className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        connectMethod === "desktop_app" 
-                          ? "bg-cyan-500/20 text-cyan-400 shadow-sm border border-cyan-500/30" 
-                          : "text-slate-500 hover:text-slate-300"
-                      }`}
-                    >
-                      Desktop Companion
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConnectMethod("session_cookie")}
-                      className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        connectMethod === "session_cookie" 
-                          ? "bg-white/10 text-cyan-400 shadow-sm" 
-                          : "text-slate-500 hover:text-slate-300"
-                      }`}
-                    >
-                      Session Cookie
-                    </button>
+                    {connectPlatform !== "Bluesky" && (
+                      <button
+                        type="button"
+                        onClick={() => setConnectMethod("desktop_app")}
+                        className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          connectMethod === "desktop_app" 
+                            ? "bg-cyan-500/20 text-cyan-400 shadow-sm border border-cyan-500/30" 
+                            : "text-slate-500 hover:text-slate-300"
+                        }`}
+                      >
+                        Desktop Companion
+                      </button>
+                    )}
+                    {connectPlatform !== "Bluesky" && (
+                      <button
+                        type="button"
+                        onClick={() => setConnectMethod("session_cookie")}
+                        className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          connectMethod === "session_cookie" 
+                            ? "bg-white/10 text-cyan-400 shadow-sm" 
+                            : "text-slate-500 hover:text-slate-300"
+                        }`}
+                      >
+                        Session Cookie
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setConnectMethod("credentials")}
@@ -962,41 +972,54 @@ export default function App() {
                   {connectMethod === "credentials" && (
                     <>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Username / Email</label>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">
+                          {connectPlatform === "Bluesky" ? "Bluesky Handle (e.g. handle.bsky.social)" : "Username / Email"}
+                        </label>
                         <input 
                           type="text" 
                           value={connectUsername}
                           onChange={(e) => setConnectUsername(e.target.value)}
                           className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
+                          placeholder={connectPlatform === "Bluesky" ? "e.g. username.bsky.social" : ""}
                           required={connectMethod === "credentials"}
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Password</label>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">
+                          {connectPlatform === "Bluesky" ? "App Password" : "Password"}
+                        </label>
                         <input 
                           type="password" 
                           value={connectPassword}
                           onChange={(e) => setConnectPassword(e.target.value)}
                           className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
+                          placeholder={connectPlatform === "Bluesky" ? "e.g. xxxx-xxxx-xxxx-xxxx" : ""}
                           required={connectMethod === "credentials"}
                         />
+                        {connectPlatform === "Bluesky" && (
+                          <p className="text-[9px] text-slate-500 mt-2 font-mono">
+                            Please generate an App Password in Bluesky (Settings &gt; App Passwords) rather than using your primary account password.
+                          </p>
+                        )}
                       </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex justify-between">
-                          <span>2FA Setup Key (Authenticator Secret)</span>
-                          <span className="text-slate-600 normal-case font-normal">(Optional)</span>
-                        </label>
-                        <input 
-                          type="text" 
-                          value={connectTwoFactor}
-                          onChange={(e) => setConnectTwoFactor(e.target.value)}
-                          className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
-                          placeholder="e.g. JBSWY3DPEHPK3PXP"
-                        />
-                        <p className="text-[9px] text-slate-500 mt-2 font-mono">
-                          To bypass 2FA prompts automatically, provide the Base32 setup key given when configuring your Authenticator App. The engine will generate the 6-digit codes on the fly.
-                        </p>
-                      </div>
+                      {connectPlatform !== "Bluesky" && (
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex justify-between">
+                            <span>2FA Setup Key (Authenticator Secret)</span>
+                            <span className="text-slate-600 normal-case font-normal">(Optional)</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            value={connectTwoFactor}
+                            onChange={(e) => setConnectTwoFactor(e.target.value)}
+                            className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
+                            placeholder="e.g. JBSWY3DPEHPK3PXP"
+                          />
+                          <p className="text-[9px] text-slate-500 mt-2 font-mono">
+                            To bypass 2FA prompts automatically, provide the Base32 setup key given when configuring your Authenticator App. The engine will generate the 6-digit codes on the fly.
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                   
