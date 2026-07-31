@@ -96,15 +96,15 @@ Below is the current verification and implementation status of OmniPost Automati
 - [x] **Immediate Content Dispatch (Instant Publish)**: Synchronous posting via Puppeteer browser automation.
 - [x] **Smart Media Upload Engine**:
   - [x] Drag-and-drop media uploading on desktop.
-  - [ ] Mobile-friendly manual file upload picker ("Attach Media" button).
+  - [x] Mobile-friendly manual file upload picker ("Attach Media" button).
   - [x] Double-fallback cloud-storage: Direct upload to Firebase Storage when fully configured, with automatic base64 in-transit data fallback when running locally.
 - [x] **Multi-Platform Puppeteer Automation**:
   - [x] **Twitter/X**: Automatic textbox populating, sequential local temp-file media upload, and post/tweet click events.
   - [ ] **LinkedIn**: Field focus injection, multi-media uploading, and publish workflows.
   - [x] **Facebook**: Status message automation and media asset attachment.
-  - [ ] **Instagram**: Automation for photo/video posts and caption injection.
-- [ ] **Automated Background Scheduling Worker**: Server-side chronologically active cron loop (running every 10s) that pulls due posts, downloads any secure media files, decrypts credentials, and publishes them automatically.
-- [ ] **Visual Lifecycle State Tracker**: Real-time reactive labels highlighting progress status (`Queued`, `Processing`, `Scheduled`, `Published`, `Failed`) directly in the user feed.
+  - [x] **Instagram**: Automation for photo/video posts and caption injection.
+- [x] **Automated Background Scheduling Worker**: Server-side chronologically active cron loop (running every 10s) that pulls due posts, downloads any secure media files, decrypts credentials, and publishes them automatically.
+- [x] **Visual Lifecycle State Tracker**: Real-time reactive labels highlighting progress status (`Queued`, `Processing`, `Scheduled`, `Published`, `Failed`) directly in the user feed.
 
 ### 🧪 Upcoming / Experimental (In-Progress) Features
 - [ ] **Rich Media Video Uploading**: Support for heavier `.mp4` and `.mov` media uploads through optimal chunking.

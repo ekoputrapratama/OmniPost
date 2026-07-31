@@ -122,42 +122,50 @@ function startPlatformLogin(platform) {
   mainWindow.webContents.on('did-navigate', async (event, url) => {
     if (!isAuthenticating) return;
     
-    const urlObj = new URL(url);
-    // Check if we are on the home page (logged in)
-    if (url === 'https://twitter.com/home' || url === 'https://x.com/home' || url === 'https://www.instagram.com/' || (urlObj.host === 'www.facebook.com' && (urlObj.pathname === '/' || urlObj.pathname === '/home.php')) || url.includes('linkedin.com/feed')) {
-      isAuthenticating = false;
-      
-      // Get cookies
-      try {
-        const cookies = await session.defaultSession.cookies.get({});
-        
-        // Format cookies into a raw string, but only for the relevant platform domain to reduce size and improve security
-        const platLower = platform.toLowerCase();
-        const filteredCookies = cookies.filter(c => {
-          if (!c.domain) return false;
-          if (platLower === 'twitter' || platLower === 'x') {
-            return c.domain.includes('twitter.com') || c.domain.includes('x.com');
-          } else if (platLower === 'instagram') {
-            return c.domain.includes('instagram.com');
-          } else if (platLower === 'facebook') {
-            return c.domain.includes('facebook.com');
-          } else if (platLower === 'linkedin') {
-            return c.domain.includes('linkedin.com');
-          }
-          return false;
-        });
+    try {
+      const urlObj = new URL(url);
+      const isTwitterHome = url === 'https://twitter.com/home' || url === 'https://x.com/home' || (urlObj.host.includes('twitter.com') || urlObj.host.includes('x.com')) && urlObj.pathname === '/home';
+      const isInstagramHome = (urlObj.host === 'www.instagram.com' || urlObj.host === 'instagram.com') && (urlObj.pathname === '/' || urlObj.pathname.startsWith('/accounts/onetap'));
+      const isFacebookHome = (urlObj.host === 'www.facebook.com' || urlObj.host === 'facebook.com') && (urlObj.pathname === '/' || urlObj.pathname === '/home.php');
+      const isLinkedInHome = url.includes('linkedin.com/feed');
 
-        const cookieString = filteredCookies.map(c => `${c.name}=${c.value}`).join('; ');
+      if (isTwitterHome || isInstagramHome || isFacebookHome || isLinkedInHome) {
+        isAuthenticating = false;
         
-        // Send back to Omnipost API
-        mainWindow.loadFile('success.html');
-        await submitSessionCookie(platform, cookieString);
-        
-      } catch (err) {
-        console.error('Failed to extract cookies:', err);
-        dialog.showErrorBox('Cookie Extraction Failed', err.message);
-        mainWindow.loadFile('index.html');
+        // Get cookies
+        try {
+          const cookies = await session.defaultSession.cookies.get({});
+          
+          // Format cookies into a raw string, but only for the relevant platform domain to reduce size and improve security
+          const platLower = platform.toLowerCase();
+          const filteredCookies = cookies.filter(c => {
+            if (!c.domain) return false;
+            if (platLower === 'twitter' || platLower === 'x') {
+              return c.domain.includes('twitter.com') || c.domain.includes('x.com');
+            } else if (platLower === 'instagram') {
+              return c.domain.includes('instagram.com');
+            } else if (platLower === 'facebook') {
+              return c.domain.includes('facebook.com');
+            } else if (platLower === 'linkedin') {
+              return c.domain.includes('linkedin.com');
+            }
+            return false;
+          });
+
+          const cookieString = filteredCookies.map(c => `${c.name}=${c.value}`).join('; ');
+          
+          // Send back to Omnipost API
+          mainWindow.loadFile('success.html');
+          await submitSessionCookie(platform, cookieString);
+          
+        } catch (err) {
+          console.error('Failed to extract cookies:', err);
+          dialog.showErrorBox('Cookie Extraction Failed', err.message);
+          mainWindow.loadFile('index.html');
+        }
       }
+    } catch (parseErr) {
+      console.error('Failed to parse navigation URL:', parseErr);
     }
   });
 }
