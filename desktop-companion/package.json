@@ -4,12 +4,14 @@
   "description": "Desktop Companion for Omnipost Automation to extract session cookies securely.",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder build --publish never"
   },
   "dependencies": {
     "axios": "^1.6.0"
   },
   "devDependencies": {
-    "electron": "^29.0.0"
+    "electron": "^29.0.0",
+    "electron-builder": "^26.15.3"
   }
 }

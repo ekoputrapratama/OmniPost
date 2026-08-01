@@ -861,6 +861,13 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+
+                      {post.status === "failed" && post.error && (
+                        <div className="mt-4 p-3 bg-red-950/25 border border-red-500/20 rounded-lg text-[11px] font-mono text-red-300 leading-relaxed">
+                          <div className="text-[9px] font-bold text-red-400 uppercase tracking-widest mb-1">Diagnostic Log:</div>
+                          {post.error}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
