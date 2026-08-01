@@ -103,6 +103,7 @@ Below is the current verification and implementation status of OmniPost Automati
   - [ ] **LinkedIn**: Field focus injection, multi-media uploading, and publish workflows.
   - [x] **Facebook**: Status message automation and media asset attachment.
   - [x] **Instagram**: Automation for photo/video posts and caption injection.
+  - [x] **Bluesky**: Direct AT Protocol API integration for high-reliability publishing with custom handles support and sharp-powered automatic image scaling and compression.
 - [x] **Automated Background Scheduling Worker**: Server-side chronologically active cron loop (running every 10s) that pulls due posts, downloads any secure media files, decrypts credentials, and publishes them automatically.
 - [x] **Visual Lifecycle State Tracker**: Real-time reactive labels highlighting progress status (`Queued`, `Processing`, `Scheduled`, `Published`, `Failed`) directly in the user feed.
 
