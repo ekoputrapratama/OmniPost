@@ -44,7 +44,7 @@ import {
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
-const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram", "Bluesky"];
+const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram", "Bluesky", "Pinterest"];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -201,6 +201,12 @@ export default function App() {
     // Instagram validation: require at least one media file
     if (selectedPlatforms.some(plat => plat.toLowerCase() === "instagram") && mediaFiles.length === 0) {
       setErrorMessage("Instagram is a visual-first platform and strictly requires at least one image or video to create a post. Please attach a media file.");
+      return;
+    }
+
+    // Pinterest validation: require at least one media file
+    if (selectedPlatforms.some(plat => plat.toLowerCase() === "pinterest") && mediaFiles.length === 0) {
+      setErrorMessage("Pinterest is an image-centric platform and strictly requires at least one image or video to create a Pin. Please attach a media file.");
       return;
     }
 
@@ -861,6 +867,13 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+
+                      {post.status === "failed" && post.error && (
+                        <div className="mt-4 p-3 bg-red-950/25 border border-red-500/20 rounded-lg text-[11px] font-mono text-red-300 leading-relaxed">
+                          <div className="text-[9px] font-bold text-red-400 uppercase tracking-widest mb-1">Diagnostic Log:</div>
+                          {post.error}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

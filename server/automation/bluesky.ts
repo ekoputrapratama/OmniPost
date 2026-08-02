@@ -1,5 +1,45 @@
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
+
+/**
+ * Resizes and compresses an image if it exceeds Bluesky's file size limits.
+ */
+async function compressImageIfNeeded(
+  filePath: string,
+  mimeType: string
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  let buffer = fs.readFileSync(filePath);
+  const LIMIT = 1900000; // 1.9MB safety margin (Bluesky limit is exactly 2,000,000 bytes)
+
+  if (buffer.length <= LIMIT) {
+    return { buffer, mimeType };
+  }
+
+  console.log(`[Bluesky] Image size (${buffer.length} bytes) exceeds limit. Compressing with sharp...`);
+
+  try {
+    let sharpInstance = sharp(buffer);
+    const metadata = await sharpInstance.metadata();
+
+    // Downscale if dimensions are unnecessarily huge
+    if (metadata.width && metadata.width > 2048) {
+      sharpInstance = sharpInstance.resize({
+        width: 2048,
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+
+    // Force jpeg representation at 80% quality (and progressive layout) which reduces file size dramatically
+    buffer = await sharpInstance.jpeg({ quality: 80, progressive: true }).toBuffer();
+    console.log(`[Bluesky] Compression successful. New size: ${buffer.length} bytes.`);
+    return { buffer, mimeType: "image/jpeg" };
+  } catch (err: any) {
+    console.warn(`[Bluesky] Compression failed. Using original buffer:`, err.message || err);
+    return { buffer, mimeType };
+  }
+}
 
 /**
  * Publishes content and optional media to Bluesky using the AT Protocol API.
@@ -35,7 +75,14 @@ export async function publishToBluesky(
     return;
   }
 
-  const handle = credentials.username.trim();
+  let handle = credentials.username.trim();
+  if (handle.startsWith("@")) {
+    handle = handle.slice(1);
+  }
+  if (!handle.includes(".") && !handle.includes("@")) {
+    handle = `${handle}.bsky.social`;
+  }
+
   const appPassword = credentials.password.trim();
 
   console.log(`[Bluesky] Authenticating as handle: ${handle}...`);
@@ -89,13 +136,13 @@ export async function publishToBluesky(
         else if (ext === ".mp4") mimeType = "video/mp4";
 
         console.log(`[Bluesky] Uploading blob ${i + 1}/${localMediaPaths.length}: ${filePath} (${mimeType})...`);
-        const fileBuffer = fs.readFileSync(filePath);
+        const { buffer: fileBuffer, mimeType: uploadMimeType } = await compressImageIfNeeded(filePath, mimeType);
 
         const uploadRes = await globalThis.fetch("https://bsky.social/xrpc/com.atproto.repo.uploadBlob", {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${accessJwt}`,
-            "Content-Type": mimeType
+            "Content-Type": uploadMimeType
           },
           body: fileBuffer
         });
