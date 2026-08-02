@@ -44,7 +44,7 @@ import {
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 
-const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram", "Bluesky"];
+const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram", "Bluesky", "Pinterest"];
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -201,6 +201,12 @@ export default function App() {
     // Instagram validation: require at least one media file
     if (selectedPlatforms.some(plat => plat.toLowerCase() === "instagram") && mediaFiles.length === 0) {
       setErrorMessage("Instagram is a visual-first platform and strictly requires at least one image or video to create a post. Please attach a media file.");
+      return;
+    }
+
+    // Pinterest validation: require at least one media file
+    if (selectedPlatforms.some(plat => plat.toLowerCase() === "pinterest") && mediaFiles.length === 0) {
+      setErrorMessage("Pinterest is an image-centric platform and strictly requires at least one image or video to create a Pin. Please attach a media file.");
       return;
     }
 

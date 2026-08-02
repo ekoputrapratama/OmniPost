@@ -112,6 +112,8 @@ function startPlatformLogin(platform) {
     loginUrl = 'https://www.facebook.com/login/';
   } else if (platform.toLowerCase() === 'linkedin') {
     loginUrl = 'https://www.linkedin.com/login';
+  } else if (platform.toLowerCase() === 'pinterest') {
+    loginUrl = 'https://www.pinterest.com/login/';
   } else {
     loginUrl = 'https://google.com'; // fallback
   }
@@ -128,8 +130,10 @@ function startPlatformLogin(platform) {
       const isInstagramHome = (urlObj.host === 'www.instagram.com' || urlObj.host === 'instagram.com') && (urlObj.pathname === '/' || urlObj.pathname.startsWith('/accounts/onetap'));
       const isFacebookHome = (urlObj.host === 'www.facebook.com' || urlObj.host === 'facebook.com') && (urlObj.pathname === '/' || urlObj.pathname === '/home.php');
       const isLinkedInHome = url.includes('linkedin.com/feed');
+      const pinterestMatches = urlObj.host.match(/^[a-z]{2}\.pinterest\.com/);
+      const isPinterestHome = (urlObj.host.includes('pinterest') || (pinterestMatches && pinterestMatches.length > 0)) && (urlObj.pathname === '/' || urlObj.pathname === '/feed/' || urlObj.pathname.includes('/homefeed') || urlObj.pathname.startsWith('/today'));
 
-      if (isTwitterHome || isInstagramHome || isFacebookHome || isLinkedInHome) {
+      if (isTwitterHome || isInstagramHome || isFacebookHome || isLinkedInHome || isPinterestHome) {
         isAuthenticating = false;
         
         // Get cookies
@@ -148,6 +152,8 @@ function startPlatformLogin(platform) {
               return c.domain.includes('facebook.com');
             } else if (platLower === 'linkedin') {
               return c.domain.includes('linkedin.com');
+            } else if (platLower === 'pinterest') {
+              return c.domain.includes('pinterest');
             }
             return false;
           });
@@ -155,8 +161,8 @@ function startPlatformLogin(platform) {
           const cookieString = filteredCookies.map(c => `${c.name}=${c.value}`).join('; ');
           
           // Send back to Omnipost API
-          mainWindow.loadFile('success.html');
           await submitSessionCookie(platform, cookieString);
+          mainWindow.loadFile('success.html');
           
         } catch (err) {
           console.error('Failed to extract cookies:', err);
@@ -190,6 +196,7 @@ async function submitSessionCookie(platform, cookieString) {
   } catch (error) {
     console.error('API Error:', error);
     dialog.showErrorBox('Sync Failed', 'Failed to send credentials to Omnipost. Check console for details.');
+    throw error;
   }
 }
 

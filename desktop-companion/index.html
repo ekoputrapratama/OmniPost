@@ -287,6 +287,15 @@
           </div>
           <button class="btn btn-connect" id="btn-instagram" onclick="startLogin('Instagram')">Connect</button>
         </div>
+
+        <!-- Pinterest -->
+        <div class="account-row">
+          <div class="platform-info">
+            <span class="platform-name">Pinterest</span>
+            <span class="platform-badge badge-disconnected" id="badge-pinterest">Offline</span>
+          </div>
+          <button class="btn btn-connect" id="btn-pinterest" onclick="startLogin('Pinterest')">Connect</button>
+        </div>
       </div>
       
       <button class="btn btn-sync" id="sync-accounts-btn" style="display:none;" onclick="syncAccountsStatus()">Refresh Platform Statuses</button>
@@ -359,7 +368,7 @@
         syncBtn.style.display = 'none';
         
         // Reset badges
-        ['twitter', 'linkedin', 'facebook', 'instagram'].forEach(plat => {
+        ['twitter', 'linkedin', 'facebook', 'instagram', 'pinterest'].forEach(plat => {
           const badge = document.getElementById(`badge-${plat}`);
           const btn = document.getElementById(`btn-${plat}`);
           if (badge) {
@@ -394,7 +403,7 @@
           const data = await res.json();
           const connectedPlatforms = (data.accounts || []).map(acc => acc.platform.toLowerCase());
           
-          const platforms = ['twitter', 'linkedin', 'facebook', 'instagram'];
+          const platforms = ['twitter', 'linkedin', 'facebook', 'instagram', 'pinterest'];
           platforms.forEach(plat => {
             const badge = document.getElementById(`badge-${plat}`);
             const btn = document.getElementById(`btn-${plat}`);

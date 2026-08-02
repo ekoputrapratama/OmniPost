@@ -24,6 +24,7 @@ import { publishToLinkedIn } from "./server/automation/linkedin";
 import { publishToFacebook } from "./server/automation/facebook";
 import { publishToInstagram } from "./server/automation/instagram";
 import { publishToBluesky } from "./server/automation/bluesky";
+import { publishToPinterest } from "./server/automation/pinterest";
 import firebaseConfig from "./server/firebaseConfig";
 
 const app = express();
@@ -356,6 +357,9 @@ async function publishViaBrowser(
       } else if (platLower === "linkedin") {
         platformUrl = "https://www.linkedin.com";
         platformDomain = ".linkedin.com";
+      } else if (platLower === "pinterest") {
+        platformUrl = "https://www.pinterest.com";
+        platformDomain = ".pinterest.com";
       }
 
       let parsedCookies: any[] = [];
@@ -439,6 +443,8 @@ async function publishViaBrowser(
             return false;
           if (platLower === "facebook" && !dom.includes("facebook.com"))
             return false;
+          if (platLower === "pinterest" && !dom.includes("pinterest"))
+            return false;
         }
 
         // 2. Filter out keys that exclusively belong to other platforms (anti-cross-contamination)
@@ -470,6 +476,15 @@ async function publishViaBrowser(
             ["li_at", "bcookie", "bscookie", "jsessionid"].includes(nameLower)
           )
             return false; // LinkedIn
+        } else if (platLower === "pinterest") {
+          if (["sessionid", "ds_user_id", "ig_did"].includes(nameLower))
+            return false; // Instagram
+          if (["auth_token", "ct0", "twid"].includes(nameLower)) return false; // Twitter/X
+          if (
+            ["li_at", "bcookie", "bscookie", "jsessionid"].includes(nameLower)
+          )
+            return false; // LinkedIn
+          if (["c_user", "xs"].includes(nameLower)) return false; // Facebook
         }
 
         return true;
@@ -538,6 +553,13 @@ async function publishViaBrowser(
         );
       }
       await publishToInstagram(page, content, localMediaPaths, mediaDir);
+    } else if (platLower === "pinterest") {
+      if (localMediaPaths.length === 0) {
+        throw new Error(
+          "Pinterest strictly requires an image or video to create a pin. Please attach media and try again.",
+        );
+      }
+      await publishToPinterest(page, content, localMediaPaths, mediaDir);
     } else {
       console.log(
         `[Automation] Unknown platform ${platform}. Navigating to backup portal...`,
