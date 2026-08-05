@@ -1,4 +1,16 @@
-export async function publishToFacebook(page: any, content: string, localMediaPaths: string[]): Promise<void> {
+import path from "path";
+
+async function takeScreenshot(page: any, mediaDir: string, stepName: string) {
+  try {
+    const screenshotPath = path.join(mediaDir, `debug_facebook_${stepName}.png`);
+    await page.screenshot({ path: screenshotPath });
+    console.log(`[Automation] Debug screenshot saved to ${screenshotPath}. Accessible at /media/debug_facebook_${stepName}.png`);
+  } catch (err: any) {
+    console.error(`[Automation] Failed to take debug screenshot for ${stepName}:`, err.message);
+  }
+}
+
+export async function publishToFacebook(page: any, content: string, localMediaPaths: string[], mediaDir: string): Promise<void> {
   console.log(`[Automation] Navigating to Facebook home page...`);
   try {
     await page.goto("https://www.facebook.com/", { waitUntil: "load", timeout: 30000 });
@@ -6,6 +18,8 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
     console.warn(`[Automation] Facebook navigation warning/timeout, checking if DOM is ready anyway:`, navErr.message || navErr);
   }
   
+  await takeScreenshot(page, mediaDir, "1_navigated");
+
   const currentUrl = page.url();
   if (currentUrl.includes("login") || currentUrl.includes("checkpoint") || currentUrl.includes("recover") || currentUrl.includes("unsupportedbrowser")) {
     throw new Error("Authentication failed: Facebook redirected to a login, security checkpoint, browser verification, or recovery page. Please refresh your session cookies.");
@@ -83,6 +97,7 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
   }
   
   await new Promise((r) => setTimeout(r, 3000));
+  await takeScreenshot(page, mediaDir, "2_composer_opened");
   
   console.log(`[Automation] Locating Facebook compose textbox...`);
   // Use multi-selector fallback to find any active post editor text fields
@@ -94,6 +109,7 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
   await page.type(fbEditorSelector, content, { delay: 50 });
   
   await new Promise((r) => setTimeout(r, 1500));
+  await takeScreenshot(page, mediaDir, "3_content_injected");
   if (localMediaPaths.length > 0) {
     console.log(`[Automation] Uploading media requested. Attempting to click Photo/Video trigger button first...`);
     try {
@@ -127,6 +143,7 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
         }
       `));
       await new Promise((r) => setTimeout(r, 3000));
+      await takeScreenshot(page, mediaDir, "4_media_triggered");
     } catch (mediaBtnErr) {
       console.error(`[Automation] Error clicking Photo/Video trigger:`, mediaBtnErr);
     }
@@ -162,6 +179,7 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
         await fileInput.uploadFile(...localMediaPaths);
         console.log(`[Automation] Uploaded file(s) to Facebook input, waiting for preview/thumbnail to process...`);
         await new Promise((r) => setTimeout(r, 6000));
+        await takeScreenshot(page, mediaDir, "5_media_uploaded");
       } catch (fbErr: any) {
         console.error(`[Automation] Error uploading file to Facebook input:`, fbErr.message || fbErr);
       }
@@ -207,6 +225,8 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
+
+  await takeScreenshot(page, mediaDir, "6_before_publish");
 
   console.log(`[Automation] Locating and clicking Post/Publish button...`);
   const clickPublishButton = async () => {
@@ -270,6 +290,8 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
     }
   }
 
+  await takeScreenshot(page, mediaDir, "7_after_publish_clicked");
+
   console.log(`[Automation] Waiting to verify Facebook post publication...`);
   await new Promise((r) => setTimeout(r, 6000));
 
@@ -280,6 +302,8 @@ export async function publishToFacebook(page: any, content: string, localMediaPa
     await new Promise((r) => setTimeout(r, 6000));
     dialogOpen = await page.evaluate(new Function('return !!document.querySelector("div[role=\'dialog\']");'));
   }
+
+  await takeScreenshot(page, mediaDir, "8_final_result");
 
   if (dialogOpen) {
     throw new Error("Facebook compose dialog failed to close. The post may be incomplete, blocked, or the Post button was unresponsive.");

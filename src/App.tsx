@@ -18,7 +18,23 @@ import {
   LogOut,
   Plus,
   Trash2,
-  Image
+  Image,
+  Cpu, 
+  Layers, 
+  Globe, 
+  Sliders, 
+  Calendar, 
+  Paperclip, 
+  ExternalLink, 
+  Eye, 
+  Settings, 
+  Zap, 
+  Sparkles, 
+  Activity, 
+  Video, 
+  Info, 
+  X, 
+  ChevronRight
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { 
@@ -43,8 +59,239 @@ import {
   getDownloadURL
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
+import AnalyticsPanel from "./components/AnalyticsPanel";
 
-const PLATFORMS = ["Twitter", "LinkedIn", "Facebook", "Instagram", "Bluesky", "Pinterest", "TikTok"];
+const PLATFORMS = ["Twitter", "Facebook", "Instagram", "Bluesky", "Pinterest", "TikTok"];
+
+const isVideoUrl = (url: string) => {
+  if (!url) return false;
+  const cleanUrl = url.split(/[?#]/)[0];
+  return /\.(mp4|mov|webm|m4v|ogv|3gp|mkv)$/i.test(cleanUrl) || url.toLowerCase().includes("video") || url.startsWith("data:video");
+};
+
+const extractVideoThumbnail = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve("");
+    }, 4000);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      try {
+        video.src = "";
+        video.load();
+      } catch (e) {}
+      URL.revokeObjectURL(url);
+    };
+
+    video.onloadedmetadata = () => {
+      const duration = video.duration || 0;
+      const seekTime = duration > 0 ? Math.min(1.5, duration / 2) : 1;
+      video.currentTime = seekTime;
+    };
+
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 320;
+        canvas.height = video.videoHeight || 180;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+          cleanup();
+          resolve(dataUrl);
+        } else {
+          cleanup();
+          resolve("");
+        }
+      } catch (err) {
+        console.error("Error drawing video frame:", err);
+        cleanup();
+        resolve("");
+      }
+    };
+
+    video.onerror = () => {
+      cleanup();
+      resolve("");
+    };
+  });
+};
+
+function SocialPreview({ content, mediaFiles, mediaUrl, platform }: { content: string, mediaFiles: any[], mediaUrl: string, platform: string }) {
+  const firstMedia = mediaFiles[0];
+  const previewMediaUrl = firstMedia?.url || firstMedia?.data || mediaUrl;
+  const isVideo = firstMedia ? firstMedia.type.startsWith('video') : isVideoUrl(mediaUrl);
+
+  const renderMedia = () => {
+    if (!previewMediaUrl) return null;
+    if (isVideo) {
+      return (
+        <div className="relative mt-3 rounded-xl border border-zinc-800/80 overflow-hidden bg-black aspect-video max-h-60 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md border border-white/40 flex items-center justify-center text-white">
+              <svg className="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+          <video src={previewMediaUrl} poster={firstMedia?.thumbnail} className="w-full h-full object-cover" muted />
+        </div>
+      );
+    }
+    return (
+      <img 
+        src={previewMediaUrl} 
+        alt="Preview attachment" 
+        className="mt-3 rounded-xl border border-zinc-800/80 w-full object-cover max-h-60" 
+        referrerPolicy="no-referrer" 
+      />
+    );
+  };
+
+  switch (platform.toLowerCase()) {
+    case "twitter":
+    case "bluesky":
+      return (
+        <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl text-sm font-sans text-left">
+          <div className="flex gap-3">
+            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-300 font-bold shrink-0 border border-zinc-700">
+              O
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-zinc-100 hover:underline cursor-pointer">OmniPublisher</span>
+                <span className="text-xs text-zinc-500">@omnipost • 1s</span>
+              </div>
+              <p className="text-zinc-200 mt-1.5 whitespace-pre-wrap leading-relaxed break-words">{content || "Start typing your dispatch payload to preview..."}</p>
+              {renderMedia()}
+              <div className="flex justify-between items-center text-zinc-500 mt-4 max-w-xs text-xs">
+                <span className="flex items-center gap-1 hover:text-cyan-400 cursor-pointer"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> 0</span>
+                <span className="flex items-center gap-1 hover:text-green-400 cursor-pointer"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.248 8H15V3" /></svg> 0</span>
+                <span className="flex items-center gap-1 hover:text-red-400 cursor-pointer"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg> 0</span>
+                <span className="flex items-center gap-1 hover:text-blue-400 cursor-pointer"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    case "instagram":
+      return (
+        <div className="bg-zinc-950 border border-zinc-850 rounded-xl overflow-hidden font-sans max-w-sm mx-auto text-sm text-left">
+          <div className="p-3 flex items-center justify-between border-b border-zinc-900 bg-zinc-950/40">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 via-red-500 to-purple-600 p-[1.5px]">
+                <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-zinc-300 font-bold text-xs">
+                  O
+                </div>
+              </div>
+              <div>
+                <span className="font-bold text-zinc-100 block text-xs">omnipost</span>
+                <span className="text-[10px] text-zinc-500 block">Original Audio</span>
+              </div>
+            </div>
+            <span className="text-zinc-400 font-bold hover:text-white cursor-pointer">•••</span>
+          </div>
+          <div className="bg-zinc-900/60 flex items-center justify-center aspect-square overflow-hidden relative border-y border-zinc-900">
+            {previewMediaUrl ? (
+              isVideo ? (
+                <video src={previewMediaUrl} poster={firstMedia?.thumbnail} className="w-full h-full object-cover animate-fade-in" p-1="true" muted autoPlay loop />
+              ) : (
+                <img src={previewMediaUrl} alt="Instagram preview" className="w-full h-full object-cover animate-fade-in" />
+              )
+            ) : (
+              <div className="flex flex-col items-center justify-center text-zinc-600 gap-2 p-6 text-center">
+                <svg className="w-8 h-8 stroke-current opacity-50" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"><path d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 002.25 1.5z" /></svg>
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">No Media Selected</p>
+              </div>
+            )}
+          </div>
+          <div className="p-4 bg-zinc-950">
+            <div className="flex justify-between items-center text-zinc-200 mb-3">
+              <div className="flex gap-4">
+                <svg className="w-5 h-5 hover:text-red-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                <svg className="w-5 h-5 hover:text-blue-400 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                <svg className="w-5 h-5 hover:text-green-400 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684" /></svg>
+              </div>
+              <svg className="w-5 h-5 hover:text-yellow-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-zinc-100 text-xs">1,248 likes</p>
+              <p className="text-zinc-200 text-xs leading-relaxed">
+                <span className="font-bold text-zinc-100 mr-2 cursor-pointer hover:underline">omnipost</span>
+                <span className="whitespace-pre-wrap">{content || "Start typing your dispatch payload..."}</span>
+              </p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-2 block">1 second ago</p>
+            </div>
+          </div>
+        </div>
+      );
+    case "tiktok":
+      return (
+        <div className="bg-black border border-zinc-850 rounded-xl overflow-hidden font-sans relative aspect-[9/16] max-w-[240px] mx-auto text-white shadow-2xl text-left">
+          {previewMediaUrl ? (
+            isVideo ? (
+              <video src={previewMediaUrl} poster={firstMedia?.thumbnail} className="w-full h-full object-cover" muted autoPlay loop />
+            ) : (
+              <img src={previewMediaUrl} alt="TikTok preview" className="w-full h-full object-cover" />
+            )
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-600 gap-2 p-6 text-center bg-zinc-950">
+              <svg className="w-8 h-8 stroke-current opacity-40" fill="none" viewBox="0 0 24 24" strokeWidth="1.5"><path d="M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" /></svg>
+              <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Video Required</p>
+            </div>
+          )}
+          
+          <div className="absolute right-3 bottom-24 flex flex-col items-center gap-4 z-10 text-xs">
+            <div className="relative">
+              <div className="w-9 h-9 rounded-full border border-white/20 bg-zinc-850 flex items-center justify-center text-white font-bold text-sm">O</div>
+              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#ff0050] rounded-full flex items-center justify-center text-[10px] font-bold">+</div>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 cursor-pointer"><svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09" /></svg></div>
+              <span className="text-[10px] font-medium">1.2k</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center hover:bg-black/60 cursor-pointer"><svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M21.99 4c0-1.1-.89-2-1.99-2H4" /></svg></div>
+              <span className="text-[10px] font-medium">84</span>
+            </div>
+          </div>
+
+          <div className="absolute left-3 bottom-4 right-14 text-xs z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2.5 rounded-xl">
+            <p className="font-bold">@omnipost</p>
+            <p className="mt-1 font-normal opacity-90 line-clamp-2 leading-relaxed">{content || "Start typing content..."}</p>
+            <div className="flex items-center gap-1.5 mt-2 opacity-80">
+              <span className="w-3.5 h-3.5 animate-spin">🎵</span>
+              <p className="text-[10px] truncate max-w-[120px]">Original Audio - omnipost</p>
+            </div>
+          </div>
+        </div>
+      );
+    default:
+      return (
+        <div className="bg-zinc-950 border border-zinc-850 rounded-xl p-5 text-sm text-left">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-300 font-bold">O</div>
+            <div>
+              <span className="font-bold text-zinc-100 block">{platform} Preview</span>
+              <span className="text-xs text-zinc-500">Scheduled Dispatch Node</span>
+            </div>
+          </div>
+          <p className="text-zinc-200 mt-2 whitespace-pre-wrap leading-relaxed break-words">{content || "Start typing your dispatch payload to preview..."}</p>
+          {renderMedia()}
+        </div>
+      );
+  }
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -52,7 +299,7 @@ export default function App() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [content, setContent] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaFiles, setMediaFiles] = useState<{id?: string, name: string, type: string, data: string, uploading?: boolean, url?: string, error?: string}[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<{id?: string, name: string, type: string, data: string, uploading?: boolean, url?: string, thumbnail?: string, error?: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["Twitter"]);
   const [loading, setLoading] = useState(false);
@@ -75,6 +322,10 @@ export default function App() {
   const [disconnectingPlatform, setDisconnectingPlatform] = useState<string | null>(null);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activePreviewTab, setActivePreviewTab] = useState<string>("Twitter");
+  const [rightTab, setRightTab] = useState<"queue" | "analytics">("queue");
+  const [apiDocTab, setApiDocTab] = useState<"curl" | "json" | "node">("curl");
+  const [snippetCopied, setSnippetCopied] = useState(false);
 
   useEffect(() => {
     async function testConnection() {
@@ -255,7 +506,8 @@ export default function App() {
         platforms: selectedPlatforms,
         status: isScheduled ? 'scheduled' : 'pending',
         createdAt: new Date().toISOString(),
-        mediaUrls: mediaFiles.map(f => f.url || f.name) // Use storage URL if uploaded, fallback to name
+        mediaUrls: mediaFiles.map(f => f.url || f.name), // Use storage URL if uploaded, fallback to name
+        thumbnails: mediaFiles.map(f => f.thumbnail || "")
       };
 
       if (scheduledForIso !== undefined) {
@@ -313,9 +565,18 @@ export default function App() {
   };
 
   const handleFiles = (files: File[]) => {
-    files.forEach(file => {
+    files.forEach(async (file) => {
       const tempId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
       
+      let thumbnailDataUrl: string | undefined = undefined;
+      if (file.type.startsWith('video')) {
+        try {
+          thumbnailDataUrl = await extractVideoThumbnail(file);
+        } catch (err) {
+          console.error("Failed to extract video thumbnail:", err);
+        }
+      }
+
       const reader = new FileReader();
       reader.onload = async (ev) => {
         const base64Data = ev.target?.result as string;
@@ -327,6 +588,7 @@ export default function App() {
           name: file.name,
           type: file.type,
           data: base64Data,
+          thumbnail: thumbnailDataUrl,
           uploading: !!useFirebaseStorage
         }]);
 
@@ -398,6 +660,7 @@ export default function App() {
         platform: connectPlatform,
         method: connectMethod,
         encryptedData,
+        expired: false,
         createdAt: new Date().toISOString()
       };
 
@@ -464,419 +727,773 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const getCharLimit = (platform: string): number => {
+    switch (platform.toLowerCase()) {
+      case "twitter": return 280;
+      case "bluesky": return 300;
+      case "pinterest": return 500;
+      case "tiktok": return 2200;
+      case "instagram": return 2200;
+      case "facebook": return 5000;
+      default: return 280;
+    }
+  };
+
+  const getApiSnippet = (): string => {
+    const uid = user?.uid || "your_account_uid";
+    switch (apiDocTab) {
+      case "curl":
+        return `curl -X POST https://omnipost-hub.ai.studio/api/v1/publish \\
+  -H "Authorization: Bearer sk_${uid}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "content": "${content.replace(/"/g, '\\"').replace(/\n/g, '\\n') || "Hello from OmniPost!"}",
+    "platforms": ${JSON.stringify(selectedPlatforms.length > 0 ? selectedPlatforms : ["Twitter"])}
+  }'`;
+      case "json":
+        return `{
+  "content": "${content.replace(/"/g, '\\"').replace(/\n/g, '\\n') || "Hello from OmniPost!"}",
+  "platforms": ${JSON.stringify(selectedPlatforms.length > 0 ? selectedPlatforms : ["Twitter"])},
+  "mediaUrls": ${JSON.stringify(mediaFiles.map(f => f.url || "https://example.com/media.png"))}
+}`;
+      case "node":
+        return `const res = await fetch('https://omnipost-hub.ai.studio/api/v1/publish', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk_${uid}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    content: '${content.replace(/'/g, "\\'").replace(/\n/g, '\\n') || "Hello from OmniPost!"}',
+    platforms: ${JSON.stringify(selectedPlatforms.length > 0 ? selectedPlatforms : ["Twitter"])}
+  })
+});
+console.log(await res.json());`;
+      default:
+        return "";
+    }
+  };
+
+  const copySnippet = () => {
+    navigator.clipboard.writeText(getApiSnippet());
+    setSnippetCopied(true);
+    setTimeout(() => setSnippetCopied(false), 2000);
+  };
+
+  const isPublishDisabled = 
+    !content.trim() || 
+    selectedPlatforms.length === 0 || 
+    loading || 
+    mediaFiles.some(f => f.uploading) || 
+    selectedPlatforms.some(p => content.length > getCharLimit(p));
+
   if (authLoading) {
     return (
-      <div className="h-screen bg-[#050608] flex items-center justify-center">
-        <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin" />
+      <div className="h-screen bg-[#09090b] flex flex-col items-center justify-center relative overflow-hidden">
+        {/* Background Grids */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900/60 via-[#09090b] to-[#040405] opacity-80 pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808003_1px,transparent_1px),linear-gradient(to_bottom,#80808003_1px,transparent_1px)] bg-[size:16px_24px] pointer-events-none" />
+        
+        <div className="relative flex flex-col items-center">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent opacity-60 animate-pulse" />
+            <Bot className="w-8 h-8 text-emerald-400 animate-spin" style={{ animationDuration: '3s' }} />
+          </div>
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Allocating Secure Container</p>
+            <div className="w-32 h-1 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800/40">
+              <div className="h-full bg-emerald-500 rounded-full animate-progress-bar w-[60%]" style={{ animation: 'progress 1.5s infinite ease-in-out' }} />
+            </div>
+          </div>
+        </div>
+        
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+        `}} />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="h-screen bg-[#050608] flex flex-col items-center justify-center text-slate-300 font-sans selection:bg-cyan-500/30">
-        <div className="w-16 h-16 bg-cyan-500 rounded-lg shadow-[0_0_30px_rgba(6,182,212,0.3)] flex items-center justify-center text-black font-bold mb-8">
-          <Bot className="w-8 h-8" />
+      <div className="h-screen bg-[#09090b] flex flex-col items-center justify-center text-zinc-300 font-sans selection:bg-emerald-500/30 relative overflow-hidden">
+        {/* Grid Overlays */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-[#09090b] to-[#040405] opacity-90 pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808004_1px,transparent_1px),linear-gradient(to_bottom,#80808004_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
+        
+        <div className="w-full max-w-md p-8 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl backdrop-blur-xl shadow-2xl relative z-10 flex flex-col items-center">
+          <div className="w-14 h-14 bg-zinc-950 border border-zinc-800 rounded-xl shadow-inner flex items-center justify-center relative overflow-hidden mb-6">
+            <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 to-transparent" />
+            <Bot className="w-7 h-7 text-emerald-400" />
+          </div>
+          
+          <div className="text-center mb-8">
+            <h1 className="text-xl font-bold tracking-tight text-white uppercase font-mono">OmniPost</h1>
+            <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[9px] font-mono font-bold text-emerald-400 uppercase tracking-widest">
+              v1.0.4 • ACTIVE
+            </span>
+            <p className="text-xs text-zinc-400 mt-4 leading-relaxed max-w-xs">
+              AI Browser Automation Gateway. Cross-publish to major social networks instantly via headless Puppeteer browser instances.
+            </p>
+          </div>
+
+          <div className="w-full space-y-3 mb-8 text-left">
+            <div className="flex items-center gap-3 p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/5 flex items-center justify-center text-emerald-400"><Cpu className="w-3.5 h-3.5" /></div>
+              <div>
+                <h4 className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider">Browser Automation</h4>
+                <p className="text-[10px] text-zinc-500 leading-none mt-0.5">Automated puppeteer page instances</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/5 flex items-center justify-center text-emerald-400"><Activity className="w-3.5 h-3.5" /></div>
+              <div>
+                <h4 className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider">Live Trace Streams</h4>
+                <p className="text-[10px] text-zinc-500 leading-none mt-0.5">Realtime terminal execution logs</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleLogin}
+            className="w-full bg-zinc-100 text-zinc-950 hover:bg-white border border-white/20 rounded-xl py-3 text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2.5 active:scale-95 shadow-md cursor-pointer"
+          >
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            Sign in with Google
+          </button>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white uppercase mb-2">OmniPost</h1>
-        <p className="text-sm text-slate-500 mb-8 max-w-sm text-center">AI Browser Automation Hub for seamless cross-platform publishing.</p>
-        <button
-          onClick={handleLogin}
-          className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-widest text-white transition-all flex items-center gap-3"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-          Authenticate to System
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-[#050608] text-slate-300 font-sans selection:bg-cyan-500/30 flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#09090b] text-zinc-300 font-sans selection:bg-emerald-500/30 flex flex-col overflow-hidden relative">
+      {/* Dynamic Cyber Dot Overlay and subtle top glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900/40 via-[#09090b] to-[#040405] opacity-80 pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808003_1px,transparent_1px),linear-gradient(to_bottom,#80808003_1px,transparent_1px)] bg-[size:16px_24px] pointer-events-none" />
+
       {/* Header */}
-      <nav className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-[#0a0c10]/80 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-8 h-8 bg-cyan-500 rounded-sm shadow-[0_0_15px_rgba(6,182,212,0.5)] flex items-center justify-center text-black font-bold">
-            <Bot className="w-5 h-5" />
+      <header className="h-14 border-b border-zinc-800/80 flex items-center justify-between px-6 bg-zinc-950/60 backdrop-blur-md shrink-0 relative z-20">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center shadow-lg relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent" />
+            <Bot className="w-4.5 h-4.5 text-emerald-400" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white uppercase">
-            OmniPost <span className="text-cyan-500">v1.0</span>
-          </h1>
+          <div>
+            <h1 className="text-sm font-bold tracking-tight text-white uppercase font-mono flex items-center gap-1.5">
+              OmniPost <span className="text-[10px] text-zinc-500 font-normal">v1.0.4</span>
+            </h1>
+          </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-[10px] font-mono text-green-500 uppercase tracking-widest">Engine: Active</span>
+        
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider">Node West: Active</span>
           </div>
-          <div className="text-[10px] font-mono text-slate-500 hidden sm:block">USER: {user.uid.substring(0, 8).toUpperCase()}</div>
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">Latency: </span>
+            <span className="text-[9px] font-mono text-emerald-400">42ms</span>
+          </div>
+          <div className="text-[9px] font-mono text-zinc-500 hidden sm:block bg-zinc-900/40 border border-zinc-800/40 px-2.5 py-1 rounded-lg">
+            UID: {user.uid.substring(0, 8).toUpperCase()}
+          </div>
           <button 
             onClick={handleLogout}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-red-500/20 border border-white/10 flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors"
-            title="Logout"
+            className="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-500/30 flex items-center justify-center text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+            title="Sign Out"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
-      </nav>
+      </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 gap-6 grid grid-cols-1 lg:grid-cols-12 overflow-y-auto relative">
-        {/* Left Column: API Docs & Manual Trigger */}
-        <div className="lg:col-span-5 space-y-6 flex flex-col">
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 gap-6 grid grid-cols-1 lg:grid-cols-12 overflow-y-auto relative z-10">
+        {/* Left Column: API Gateway & Account Sync */}
+        <div className="lg:col-span-4 space-y-6 flex flex-col min-w-0">
           
-          {/* API Integration Card */}
-          <div className="bg-[#0d1117] border border-white/5 rounded-xl p-5 relative overflow-hidden shrink-0">
-            <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-cyan-400" />
-              Agent Integration
-            </h2>
+          {/* API Gateway Panel */}
+          <div className="bg-zinc-900/40 border border-zinc-800/85 rounded-2xl p-5 relative overflow-hidden shrink-0">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                API Gateway
+              </h2>
+              <span className="text-[9px] font-mono bg-zinc-950 border border-zinc-800/60 text-zinc-500 px-1.5 py-0.5 rounded font-bold uppercase">SSL</span>
+            </div>
             
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">API Endpoint (POST)</label>
-                <code className="block w-full bg-black/40 border border-white/5 rounded p-3 text-[10px] text-cyan-400 font-mono">
-                  {window.location.origin}/api/agent/{user.uid}/publish
-                </code>
-              </div>
-              
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Auth Key</label>
+                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Bearer Token Key</label>
                 <div className="relative">
-                  <code className="block w-full bg-black/40 border border-white/5 rounded p-3 pr-12 text-[10px] text-slate-300 font-mono">
-                    Bearer sk_{user.uid}
+                  <code className="block w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 pr-10 text-[10px] text-zinc-400 font-mono truncate">
+                    sk_{user.uid}
                   </code>
                   <button 
                     type="button"
                     onClick={copyApiKey}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-white transition-colors rounded hover:bg-white/10"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-zinc-500 hover:text-white transition-colors rounded-lg hover:bg-zinc-800"
                   >
-                    {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
 
+              {/* API Language Tabs */}
               <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Payload Schema</label>
-                <pre className="block w-full bg-black/40 border border-white/5 rounded p-3 text-[10px] text-cyan-400 font-mono overflow-x-auto">
-{`{
-  "content": "Hello world!",
-  "platforms": ["Twitter"],
-  "mediaUrls": ["https://example.com/img.jpg"]
-}`}
-                </pre>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Integration Code</label>
+                  <div className="flex gap-1 p-0.5 bg-zinc-950 border border-zinc-850 rounded-lg">
+                    {(["curl", "json", "node"] as const).map(lang => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => setApiDocTab(lang)}
+                        className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold uppercase transition-all cursor-pointer ${
+                          apiDocTab === lang 
+                            ? "bg-zinc-800 text-white" 
+                            : "text-zinc-500 hover:text-zinc-300"
+                        }`}
+                      >
+                        {lang}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative group">
+                  <pre className="block w-full bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3.5 text-[9px] text-emerald-400 font-mono overflow-x-auto max-h-40 leading-relaxed scrollbar-thin">
+                    {getApiSnippet()}
+                  </pre>
+                  <button 
+                    type="button"
+                    onClick={copySnippet}
+                    className="absolute right-2.5 top-2.5 p-1.5 text-zinc-500 hover:text-white transition-colors rounded-lg bg-zinc-900 border border-zinc-850 opacity-0 group-hover:opacity-100 shadow"
+                  >
+                    {snippetCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Connected Accounts */}
-          <div className="bg-[#0d1117] border border-white/5 rounded-xl p-5 shrink-0">
+          {/* Connected Accounts Manager */}
+          <div className="bg-zinc-900/40 border border-zinc-800/85 rounded-2xl p-5 shrink-0">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Connected Social Media</h2>
+              <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                Active Channels
+              </h2>
               <button 
                 onClick={() => setShowConnectModal(true)}
-                className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-cyan-400 hover:text-cyan-300 bg-cyan-400/10 px-2 py-1 rounded border border-cyan-400/20 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+                className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-xl border border-emerald-500/20 transition-all cursor-pointer"
               >
-                <Plus className="w-3 h-3" /> Connect Social Media
+                <Plus className="w-3 h-3" /> Connect Channel
               </button>
             </div>
+
             {connectedAccounts.length === 0 ? (
-              <div className="text-[10px] font-mono text-slate-600 uppercase border border-dashed border-white/10 rounded p-4 text-center">
-                No social media connected.<br/>Connect an account to enable automation.
+              <div className="text-[10px] font-mono text-zinc-500 uppercase border border-dashed border-zinc-800/80 rounded-xl p-5 text-center bg-zinc-950/20">
+                No active channels linked.<br/>Connect below to enable automated dispatch.
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-52 overflow-y-auto scrollbar-thin pr-1">
                 {connectedAccounts.map((acc, i) => (
-                  <div key={i} className="flex items-center justify-between bg-black/40 border border-white/5 p-2 rounded">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{acc.platform}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[9px] font-mono text-green-500 flex items-center gap-1">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                        SECURE
-                      </span>
-                      <button
-                        onClick={() => handleDisconnectAccount(acc.platform)}
-                        disabled={disconnectingPlatform === acc.platform}
-                        className="text-red-500/70 hover:text-red-400 p-1 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                        title={`Disconnect ${acc.platform}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                  <div key={i} className="flex flex-col gap-1.5 bg-zinc-950/40 border border-zinc-850 p-2.5 rounded-xl">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${acc.expired ? "bg-red-500 animate-pulse" : "bg-emerald-500 animate-pulse"}`} />
+                        <span className="text-[10px] font-bold text-zinc-200 uppercase tracking-wider">{acc.platform}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {acc.expired ? (
+                          <span className="text-[8px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">
+                            EXPIRED
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-mono text-emerald-500 bg-emerald-500/5 border border-emerald-500/10 px-1.5 py-0.5 rounded font-bold uppercase">
+                            SECURE
+                          </span>
+                        )}
+                        {acc.expired && (
+                          <button
+                            onClick={() => {
+                              setConnectPlatform(acc.platform);
+                              setShowConnectModal(true);
+                            }}
+                            className="text-emerald-400 hover:text-emerald-300 p-1 rounded-lg hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                            title={`Reconnect ${acc.platform}`}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDisconnectAccount(acc.platform)}
+                          disabled={disconnectingPlatform === acc.platform}
+                          className="text-zinc-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50 cursor-pointer"
+                          title={`Disconnect ${acc.platform}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
+                    {acc.expired && (
+                      <div className="text-[8px] font-mono text-red-400 bg-red-950/20 border border-red-950/40 px-2 py-1 rounded-md leading-normal">
+                        <span className="font-bold">Error:</span> {acc.lastError || "Session expired. Please click reconnect icon above to update your session cookies."}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
-
-          {/* Manual Post Card */}
-          <div className="bg-[#0d1117] border border-white/5 rounded-xl p-5 flex-1 flex flex-col shrink-0 min-h-[350px]">
-            <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Manual Post Creation</h2>
-            <form onSubmit={handleManualPost} className="flex flex-col h-full flex-1">
-              <div 
-                className="relative flex-1 flex flex-col min-h-[120px]"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleFileDrop}
-              >
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Initialize payload content..."
-                  className="flex-1 w-full bg-black/40 border border-white/5 rounded p-4 pb-8 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all resize-none font-mono"
-                />
-                <div className="absolute bottom-3 right-4 pointer-events-none text-[9px] text-slate-600 font-mono flex items-center gap-1 uppercase tracking-widest">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                  Drag & Drop Media
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mb-4 mt-2 bg-black/20 border border-white/5 p-2 rounded">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        handleFiles(Array.from(e.target.files));
-                      }
-                      e.target.value = '';
-                    }}
-                    multiple
-                    accept="image/*,video/*"
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-400/5 hover:bg-cyan-400/10 px-2.5 py-1.5 rounded border border-cyan-400/15"
-                  >
-                    <Image className="w-3.5 h-3.5" />
-                    Attach Media
-                  </button>
-                </div>
-                <div className="text-[8px] text-slate-600 font-mono uppercase tracking-widest hidden sm:block">
-                  or drag & drop files above
-                </div>
-              </div>
-              
-              {mediaFiles.length > 0 && (
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {mediaFiles.map((file, i) => (
-                    <div key={i} className="relative w-16 h-16 rounded border border-white/10 overflow-hidden bg-black/50 shrink-0">
-                      {file.type.startsWith('image') ? (
-                        <img src={file.url || file.data} alt="preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[8px] font-mono text-slate-500 p-1 text-center break-all">
-                          {file.name}
-                        </div>
-                      )}
-                      
-                      {file.uploading && (
-                        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center">
-                          <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />
-                          <span className="text-[7px] text-cyan-400 uppercase tracking-widest mt-1">Uploading</span>
-                        </div>
-                      )}
-                      {file.error && (
-                        <div className="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center p-1 text-center" title={file.error}>
-                          <AlertCircle className="w-4 h-4 text-red-400" />
-                          <span className="text-[7px] text-red-400 uppercase tracking-widest mt-0.5">Failed</span>
-                        </div>
-                      )}
-                      {!file.uploading && !file.error && file.url && (
-                        <div className="absolute bottom-0.5 left-0.5 bg-green-500/80 rounded px-1 text-[7px] font-bold text-white uppercase tracking-wider flex items-center gap-0.5 shadow-sm">
-                          <CheckCircle2 className="w-2 h-2" /> Cloud
-                        </div>
-                      )}
-
-                      <button 
-                        type="button"
-                        onClick={() => setMediaFiles(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-0.5 right-0.5 bg-red-500/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold z-10"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              <div className="mb-4">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Media URL (Optional)</label>
-                <input 
-                  type="url"
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono placeholder-slate-600"
-                />
-              </div>
-
-              <div className="mb-6">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 block">Target Platforms</label>
-                <div className="flex flex-wrap gap-2">
-                  {PLATFORMS.map(p => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => togglePlatform(p)}
-                      className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all duration-200 border ${
-                        selectedPlatforms.includes(p)
-                          ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-400"
-                          : "bg-black/40 border-white/5 text-slate-500 hover:border-white/10 hover:text-slate-300"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Schedule Dispatch</label>
-                  <label className="inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={isScheduled} 
-                      onChange={(e) => setIsScheduled(e.target.checked)} 
-                      className="sr-only peer" 
-                    />
-                    <div className="relative w-8 h-4 bg-black/50 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-slate-400 peer-checked:after:bg-cyan-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-cyan-500/10 border border-white/5 peer-checked:border-cyan-500/30"></div>
-                  </label>
-                </div>
-
-                {isScheduled && (
-                  <div className="grid grid-cols-2 gap-2 animate-fade-in">
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1 block">Date</label>
-                      <input 
-                        type="date" 
-                        value={scheduledDate}
-                        onChange={(e) => setScheduledDate(e.target.value)}
-                        className="w-full bg-black/40 border border-white/5 rounded p-2.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
-                        required={isScheduled}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1 block">Time</label>
-                      <input 
-                        type="time" 
-                        value={scheduledTime}
-                        onChange={(e) => setScheduledTime(e.target.value)}
-                        className="w-full bg-black/40 border border-white/5 rounded p-2.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
-                        required={isScheduled}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || !content.trim() || selectedPlatforms.length === 0 || mediaFiles.some(f => f.uploading)}
-                className="mt-auto w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded py-3 text-[10px] font-bold uppercase tracking-widest text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
-                ) : mediaFiles.some(f => f.uploading) ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
-                ) : isScheduled ? (
-                  <Clock className="w-4 h-4 text-cyan-400" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-                {loading ? "Allocating Instance..." : mediaFiles.some(f => f.uploading) ? "Uploading Media..." : isScheduled ? "Schedule Payload" : "Dispatch Payload"}
-              </button>
-            </form>
-          </div>
-
         </div>
 
-        {/* Right Column: Execution Log / Feed */}
-        <div className="lg:col-span-7 flex flex-col min-h-[500px]">
-          <div className="bg-[#0d1117] border border-white/5 rounded-2xl flex flex-col flex-1 overflow-hidden">
-            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Execution Queue</h3>
-              <div className="flex gap-2">
-                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
-                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+        {/* Center Column: Publishing Command Center & Live Previews */}
+        <div className="lg:col-span-4 space-y-6 flex flex-col min-w-0">
+            
+            {/* Publisher Workspace */}
+            <div className="bg-zinc-900/40 border border-zinc-800/85 rounded-2xl p-5 flex flex-col shrink-0">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                  Publishing Hub
+                </h2>
+                <div className="flex items-center gap-1.5 font-mono text-[9px] text-zinc-500 bg-zinc-950 border border-zinc-800/40 px-2 py-0.5 rounded">
+                  <span>{content.length} CHARS</span>
+                  <span className="text-zinc-700">•</span>
+                  <span>{content.split(/\s+/).filter(Boolean).length} WORDS</span>
+                </div>
               </div>
+              
+              <form onSubmit={handleManualPost} className="flex flex-col gap-4">
+                <div 
+                  className="relative flex flex-col min-h-[140px]"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleFileDrop}
+                >
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Enter post details, paste hashtags, or drop payload content..."
+                    className="flex-1 w-full bg-zinc-950/60 border border-zinc-850 rounded-xl p-4 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 transition-all resize-none font-mono min-h-[140px] leading-relaxed"
+                  />
+                  <div className="absolute bottom-3 right-4 pointer-events-none text-[8px] text-zinc-600 font-mono flex items-center gap-1 uppercase tracking-widest">
+                    <Paperclip className="w-3 h-3" />
+                    Drop files here
+                  </div>
+                </div>
+
+                {/* Media Attachment Actions */}
+                <div className="flex items-center justify-between bg-zinc-950/30 border border-zinc-850 p-2 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleFiles(Array.from(e.target.files));
+                        }
+                        e.target.value = '';
+                      }}
+                      multiple
+                      accept="image/*,video/*"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 hover:text-white transition-colors bg-emerald-500/5 hover:bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/10 cursor-pointer"
+                    >
+                      <Image className="w-3.5 h-3.5" />
+                      Attach Media
+                    </button>
+                  </div>
+                  <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest hidden sm:inline">
+                    JPG, PNG, MP4 Supported
+                  </span>
+                </div>
+                
+                {/* File Attachment Trays */}
+                {mediaFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-2 bg-zinc-950/20 border border-zinc-850 rounded-xl">
+                    {mediaFiles.map((file, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-lg border border-zinc-850 overflow-hidden bg-zinc-950 shrink-0">
+                        {file.type.startsWith('image') ? (
+                          <img src={file.url || file.data} alt="preview" className="w-full h-full object-cover" />
+                        ) : file.thumbnail ? (
+                          <img src={file.thumbnail} alt="video thumbnail" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[7px] font-mono text-zinc-500 p-1 text-center break-all">
+                            {file.name}
+                          </div>
+                        )}
+                        
+                        {file.uploading && (
+                          <div className="absolute inset-0 bg-zinc-950/80 flex flex-col items-center justify-center">
+                            <RefreshCw className="w-4.5 h-4.5 text-emerald-400 animate-spin" />
+                          </div>
+                        )}
+                        {file.error && (
+                          <div className="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center p-1 text-center" title={file.error}>
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                          </div>
+                        )}
+                        {!file.uploading && !file.error && file.url && (
+                          <div className="absolute bottom-1 left-1 bg-emerald-500/80 rounded px-1 text-[7px] font-bold text-white uppercase tracking-wider flex items-center gap-0.5 shadow">
+                            <CheckCircle2 className="w-2 h-2" /> Live
+                          </div>
+                        )}
+
+                        <button 
+                          type="button"
+                          onClick={() => setMediaFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-1 right-1 bg-zinc-900/80 hover:bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold transition-colors cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 block">Media URL (Optional)</label>
+                  <input 
+                    type="url"
+                    value={mediaUrl}
+                    onChange={(e) => setMediaUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"
+                    className="w-full bg-zinc-950/60 border border-zinc-850 rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono placeholder-zinc-700"
+                  />
+                </div>
+
+                {/* Intelligent Platform Selection */}
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-2 block">Target Platforms</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PLATFORMS.map(p => {
+                      const connected = connectedAccounts.some(acc => acc.platform.toLowerCase() === p.toLowerCase());
+                      const selected = selectedPlatforms.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => {
+                            if (!connected) {
+                              setConnectPlatform(p);
+                              setShowConnectModal(true);
+                            } else {
+                              togglePlatform(p);
+                            }
+                          }}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-semibold transition-all border flex items-center justify-between gap-1.5 cursor-pointer ${
+                            selected
+                              ? "bg-zinc-800 border-zinc-700 text-white shadow-md border-transparent"
+                              : connected
+                                ? "bg-zinc-950/40 border-zinc-850 text-zinc-300 hover:bg-zinc-850/40"
+                                : "bg-zinc-950/10 border-zinc-900/30 text-zinc-600 hover:text-zinc-500"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 truncate">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? "bg-emerald-500 animate-pulse" : "bg-zinc-700"}`} />
+                            <span className="truncate">{p}</span>
+                          </span>
+                          {!connected && (
+                            <span className="text-[7px] font-mono font-bold text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-1 py-0.5 rounded uppercase">
+                              Link
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Character Warnings Block */}
+                {selectedPlatforms.filter(p => content.length > getCharLimit(p)).length > 0 && (
+                  <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl text-[10px] text-amber-400 flex items-start gap-2 animate-fade-in leading-relaxed">
+                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Length Over Limit:</span> Your dispatch payload exceeds text constraints for: {selectedPlatforms.filter(p => content.length > getCharLimit(p)).join(", ")}. Please shorten it.
+                    </div>
+                  </div>
+                )}
+
+                {/* Schedule Dispatch Drawer */}
+                <div className="bg-zinc-950/20 border border-zinc-850 p-3 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+                      Queue Scheduling
+                    </label>
+                    <label className="inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={isScheduled} 
+                        onChange={(e) => setIsScheduled(e.target.checked)} 
+                        className="sr-only peer" 
+                      />
+                      <div className="relative w-8 h-4.5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-zinc-400 peer-checked:after:bg-emerald-400 after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500/10 border border-zinc-700 peer-checked:border-emerald-500/30"></div>
+                    </label>
+                  </div>
+
+                  {isScheduled && (
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-zinc-850/60 animate-fade-in">
+                      <div>
+                        <label className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1 block">Date</label>
+                        <input 
+                          type="date" 
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          className="w-full bg-zinc-950/60 border border-zinc-850 rounded-xl p-2 text-[10px] text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono"
+                          required={isScheduled}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1 block">Time</label>
+                        <input 
+                          type="time" 
+                          value={scheduledTime}
+                          onChange={(e) => setScheduledTime(e.target.value)}
+                          className="w-full bg-zinc-950/60 border border-zinc-850 rounded-xl p-2 text-[10px] text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono"
+                          required={isScheduled}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isPublishDisabled}
+                  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl py-3 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {loading || mediaFiles.some(f => f.uploading) ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                  ) : isScheduled ? (
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  {loading ? "Allocating Instance..." : mediaFiles.some(f => f.uploading) ? "Uploading Media..." : isScheduled ? "Schedule Payload" : "Dispatch Payload"}
+                </button>
+              </form>
+            </div>
+
+            {/* Live Feed Preview */}
+            <div className="border border-zinc-800/80 bg-zinc-900/40 rounded-2xl p-5 shrink-0">
+              <div className="flex items-center justify-between mb-4 border-b border-zinc-800/60 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                  <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Live Preview</h3>
+                </div>
+                
+                {selectedPlatforms.length > 0 && (
+                  <div className="flex gap-1 p-0.5 bg-zinc-950 border border-zinc-850 rounded-xl max-w-[180px] overflow-x-auto scrollbar-none">
+                    {selectedPlatforms.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setActivePreviewTab(p)}
+                        className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
+                          activePreviewTab === p 
+                            ? "bg-zinc-800 text-white" 
+                            : "text-zinc-500 hover:text-zinc-300"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {selectedPlatforms.length === 0 ? (
+                <div className="py-12 text-center border border-dashed border-zinc-800/80 rounded-xl bg-zinc-950/20">
+                  <Sparkles className="w-5 h-5 text-zinc-600 mx-auto mb-2 animate-pulse" />
+                  <p className="text-[9px] uppercase font-mono tracking-widest text-zinc-500">Select active channel<br/>to render feed mockups</p>
+                </div>
+              ) : (
+                <SocialPreview 
+                  content={content} 
+                  mediaFiles={mediaFiles} 
+                  mediaUrl={mediaUrl} 
+                  platform={activePreviewTab} 
+                />
+              )}
+            </div>
+
+          </div>
+        {/* Right Column: Automated Execution Terminal */}
+        <div className="lg:col-span-4 flex flex-col min-h-[500px] min-w-0">
+          <div className="bg-zinc-900/40 border border-zinc-800/85 rounded-2xl flex flex-col flex-1 overflow-hidden">
+            <div className="p-4 border-b border-zinc-800/60 flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-zinc-950/40 shrink-0">
+              <div className="flex gap-1.5 p-0.5 bg-zinc-950 border border-zinc-850 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setRightTab("queue")}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                    rightTab === "queue"
+                      ? "bg-zinc-800 text-white border border-zinc-700/40 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  Queue Feed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightTab("analytics")}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                    rightTab === "analytics"
+                      ? "bg-zinc-800 text-white border border-zinc-700/40 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  Analytics Hub
+                </button>
+              </div>
+
+              {rightTab === "queue" ? (
+                <div className="flex gap-1.5 items-center justify-end sm:justify-start">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+                  <span className="text-[8px] font-mono font-bold text-emerald-400 uppercase tracking-wider">LIVE FEED</span>
+                </div>
+              ) : (
+                <div className="flex gap-1.5 items-center justify-end sm:justify-start">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-[8px] font-mono font-bold text-emerald-400 uppercase tracking-wider">REALTIME STATS</span>
+                </div>
+              )}
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-black/20">
-              {posts.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center text-slate-600 space-y-4 py-20 font-mono text-[10px] uppercase tracking-widest">
-                  <div className="w-12 h-12 rounded border border-white/5 flex items-center justify-center bg-white/5">
-                    <Terminal className="w-5 h-5 text-slate-500" />
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-950/20 scrollbar-thin">
+              {rightTab === "analytics" ? (
+                <AnalyticsPanel posts={posts} connectedAccounts={connectedAccounts} />
+              ) : posts.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center text-zinc-500 py-20 font-mono text-[10px] uppercase tracking-widest">
+                  <div className="w-12 h-12 rounded-xl border border-zinc-800/80 flex items-center justify-center bg-zinc-900/40 mb-4 animate-pulse">
+                    <Activity className="w-5 h-5 text-zinc-600" />
                   </div>
-                  <p>Awaiting incoming payloads<br/>from automated nodes...</p>
+                  <p className="leading-relaxed">
+                    Awaiting incoming payloads<br/>
+                    <span className="text-[9px] text-zinc-700">from automated nodes...</span>
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {posts.map((post) => (
-                    <div key={post.id} className="relative bg-[#0d1117] border border-white/5 rounded-xl p-5 shadow-lg">
-                      <div className="absolute top-0 right-0 p-4">
-                        <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest ${
-                          post.status === "published" ? "text-green-500" :
-                          post.status === "publishing" ? "text-cyan-400" :
-                          post.status === "scheduled" ? "text-cyan-400" :
-                          post.status === "pending" ? "text-slate-400" :
+                    <div key={post.id} className="relative bg-zinc-900/50 border border-zinc-800/80 rounded-xl p-4.5 shadow-lg relative overflow-hidden group">
+                      {/* Subtle status top ribbon */}
+                      <div className={`absolute top-0 left-0 right-0 h-[2px] ${
+                        post.status === "published" ? "bg-emerald-500" :
+                        post.status === "publishing" ? "bg-amber-500 animate-pulse" :
+                        post.status === "scheduled" ? "bg-blue-500" :
+                        post.status === "pending" ? "bg-zinc-600" :
+                        "bg-red-500"
+                      }`} />
+
+                      <div className="flex justify-between items-start gap-4 mb-3">
+                        <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-2 py-0.5 rounded uppercase tracking-wider font-bold">
+                          NODE-{post.id.split("-")[0].toUpperCase()}
+                        </span>
+                        
+                        <div className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${
+                          post.status === "published" ? "text-emerald-400" :
+                          post.status === "publishing" ? "text-amber-400" :
+                          post.status === "scheduled" ? "text-blue-400" :
+                          post.status === "pending" ? "text-zinc-500" :
                           "text-red-400"
                         }`}>
-                          {post.status === "published" && <><CheckCircle2 className="w-3 h-3" /> Published</>}
-                          {post.status === "publishing" && <><RefreshCw className="w-3 h-3 animate-spin" /> Processing</>}
-                          {post.status === "scheduled" && <><Clock className="w-3 h-3 text-cyan-400" /> Scheduled</>}
-                          {post.status === "pending" && <><Clock className="w-3 h-3" /> Queued</>}
-                          {post.status === "failed" && <><AlertCircle className="w-3 h-3" /> Failed</>}
+                          {post.status === "published" && <><CheckCircle2 className="w-3.5 h-3.5" /> Success</>}
+                          {post.status === "publishing" && <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> In Progress</>}
+                          {post.status === "scheduled" && <><Clock className="w-3.5 h-3.5" /> Scheduled</>}
+                          {post.status === "pending" && <><Clock className="w-3.5 h-3.5" /> Queued</>}
+                          {post.status === "failed" && <><AlertCircle className="w-3.5 h-3.5" /> Failed</>}
                         </div>
                       </div>
                       
-                      <h2 className="text-[10px] font-mono text-cyan-500 mb-3 uppercase tracking-widest">
-                        Incoming from [NODE-{post.id.split("-")[0]}]
-                      </h2>
-                      
-                      <p className="text-lg font-light text-white mb-6 italic leading-relaxed whitespace-pre-wrap">
-                        "{post.content}"
+                      <p className="text-xs text-zinc-200 mb-4 font-mono leading-relaxed whitespace-pre-wrap break-words bg-zinc-950/60 border border-zinc-850 p-3 rounded-lg">
+                        {post.content}
                       </p>
                       
                       {post.mediaUrls && post.mediaUrls.length > 0 && (
-                        <div className="mb-6 grid grid-cols-2 gap-2">
-                          {post.mediaUrls.map((url, i) => (
-                            <img key={i} src={url} alt={`Media ${i}`} className="w-full h-32 object-cover rounded-lg border border-white/10" referrerPolicy="no-referrer" />
-                          ))}
+                        <div className="mb-4 grid grid-cols-2 gap-1.5">
+                          {post.mediaUrls.map((url, i) => {
+                            const isVideo = isVideoUrl(url);
+                            const hasThumbnail = post.thumbnails && post.thumbnails[i];
+                            return isVideo ? (
+                              <div key={i} className="relative w-full h-24 rounded-lg border border-zinc-850 overflow-hidden bg-zinc-950">
+                                {hasThumbnail ? (
+                                  <img 
+                                    src={post.thumbnails[i]} 
+                                    alt={`Video preview ${i}`} 
+                                    className="w-full h-full object-cover" 
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <video 
+                                    src={url} 
+                                    className="w-full h-full object-cover" 
+                                    muted 
+                                    playsInline 
+                                  />
+                                )}
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/35 pointer-events-none">
+                                  <div className="w-7 h-7 rounded-full bg-white/20 backdrop-blur-md border border-white/40 flex items-center justify-center text-white animate-pulse">
+                                    <svg className="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24">
+                                      <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <img 
+                                key={i} 
+                                src={url} 
+                                alt={`Node Resource ${i}`} 
+                                className="w-full h-24 object-cover rounded-lg border border-zinc-850" 
+                                referrerPolicy="no-referrer" 
+                              />
+                            );
+                          })}
                         </div>
                       )}
                       
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="bg-white/5 border border-white/5 rounded-lg p-3">
-                          <div className="text-[9px] uppercase text-slate-500 mb-1 font-bold tracking-widest">Targets</div>
-                          <div className="text-xs text-slate-300 font-mono truncate">{post.platforms.join(", ")}</div>
+                      <div className="grid grid-cols-2 gap-2 text-[9px] font-mono text-zinc-500 bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-850/60">
+                        <div className="truncate">
+                          <span className="text-zinc-600 block uppercase font-bold text-[8px] tracking-wider mb-0.5">Platforms</span>
+                          <span className="text-zinc-300 uppercase tracking-wide font-bold">{post.platforms.join(", ")}</span>
                         </div>
-                        <div className="bg-white/5 border border-white/5 rounded-lg p-3">
-                          <div className="text-[9px] uppercase text-slate-500 mb-1 font-bold tracking-widest">Status</div>
-                          <div className="text-xs text-slate-300 font-mono uppercase">{post.status}</div>
-                        </div>
-                        <div className="bg-white/5 border border-white/5 rounded-lg p-3 col-span-2 md:col-span-1">
-                          <div className="text-[9px] uppercase text-slate-500 mb-1 font-bold tracking-widest">
-                            {post.status === "scheduled" ? "Scheduled For" : "Timestamp"}
-                          </div>
-                          <div className="text-xs font-mono text-slate-300 truncate">
+                        <div>
+                          <span className="text-zinc-600 block uppercase font-bold text-[8px] tracking-wider mb-0.5">
+                            {post.status === "scheduled" ? "Triggers" : "Timeline"}
+                          </span>
+                          <span className="text-zinc-300">
                             {post.status === "scheduled" && post.scheduledFor
                               ? formatDistanceToNow(new Date(post.scheduledFor), { addSuffix: true })
                               : post.publishedAt 
                                 ? formatDistanceToNow(new Date(post.publishedAt), { addSuffix: true }) 
                                 : formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-                          </div>
+                          </span>
                         </div>
                       </div>
 
                       {post.status === "failed" && post.error && (
-                        <div className="mt-4 p-3 bg-red-950/25 border border-red-500/20 rounded-lg text-[11px] font-mono text-red-300 leading-relaxed">
-                          <div className="text-[9px] font-bold text-red-400 uppercase tracking-widest mb-1">Diagnostic Log:</div>
+                        <div className="mt-3 p-3 bg-red-950/10 border border-red-900/30 rounded-lg text-[9px] font-mono text-red-400 leading-relaxed max-h-32 overflow-y-auto scrollbar-thin">
+                          <div className="text-[8px] font-bold text-red-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> System Diagnostics:
+                          </div>
                           {post.error}
                         </div>
                       )}
@@ -887,19 +1504,24 @@ export default function App() {
             </div>
           </div>
         </div>
+      </main>
 
         {/* Connect Modal */}
         {showConnectModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#0d1117] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                <h3 className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Connect Social Media Account</h3>
-                <button onClick={() => setShowConnectModal(false)} className="text-slate-500 hover:text-white">✕</button>
+          <div className="fixed inset-0 bg-[#040405]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative">
+              <div className="absolute inset-0 bg-gradient-to-b from-zinc-800/10 to-transparent pointer-events-none" />
+              <div className="p-4 border-b border-zinc-800/80 flex justify-between items-center bg-zinc-950/40 relative z-10">
+                <h3 className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                  Link Channel Node
+                </h3>
+                <button onClick={() => setShowConnectModal(false)} className="text-zinc-500 hover:text-white transition-colors cursor-pointer text-xs">✕</button>
               </div>
-              <form onSubmit={handleConnectAccount} className="p-6">
+              <form onSubmit={handleConnectAccount} className="p-6 space-y-5 relative z-10">
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Platform</label>
+                    <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Select Platform</label>
                     <select 
                       value={connectPlatform}
                       onChange={(e) => {
@@ -909,34 +1531,34 @@ export default function App() {
                           setConnectMethod("credentials");
                         }
                       }}
-                      className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50"
+                      className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-3 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono"
                     >
                       {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                   
-                  <div className="flex gap-2 p-1 bg-black/40 border border-white/5 rounded-lg mb-4 mt-2">
+                  <div className="flex gap-2 p-1 bg-zinc-950 border border-zinc-850 rounded-xl mb-4">
                     {connectPlatform !== "Bluesky" && (
                       <button
                         type="button"
                         onClick={() => setConnectMethod("desktop_app")}
-                        className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                        className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
                           connectMethod === "desktop_app" 
-                            ? "bg-cyan-500/20 text-cyan-400 shadow-sm border border-cyan-500/30" 
-                            : "text-slate-500 hover:text-slate-300"
+                            ? "bg-zinc-800 text-white border border-zinc-700/60 shadow-sm" 
+                            : "text-zinc-500 hover:text-zinc-300"
                         }`}
                       >
-                        Desktop Companion
+                        Companion App
                       </button>
                     )}
                     {connectPlatform !== "Bluesky" && (
                       <button
                         type="button"
                         onClick={() => setConnectMethod("session_cookie")}
-                        className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                        className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
                           connectMethod === "session_cookie" 
-                            ? "bg-white/10 text-cyan-400 shadow-sm" 
-                            : "text-slate-500 hover:text-slate-300"
+                            ? "bg-zinc-800 text-white border border-zinc-700/60 shadow-sm" 
+                            : "text-zinc-500 hover:text-zinc-300"
                         }`}
                       >
                         Session Cookie
@@ -945,135 +1567,112 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setConnectMethod("credentials")}
-                      className={`flex-1 py-2 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${
+                      className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
                         connectMethod === "credentials" 
-                          ? "bg-white/10 text-white shadow-sm" 
-                          : "text-slate-500 hover:text-slate-300"
+                          ? "bg-zinc-800 text-white border border-zinc-700/60 shadow-sm" 
+                          : "text-zinc-500 hover:text-zinc-300"
                       }`}
                     >
-                      Login Details
+                      Credentials
                     </button>
                   </div>
 
                   {connectMethod === "desktop_app" && (
-                    <div className="flex flex-col items-center justify-center py-6 text-center">
-                      <div className="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-4 text-cyan-400">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+                    <div className="flex flex-col items-center justify-center py-4 text-center">
+                      <div className="w-10 h-10 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center mb-3 text-emerald-400">
+                        <Cpu className="w-5 h-5 animate-pulse" />
                       </div>
-                      <h4 className="text-slate-200 font-bold mb-2">Omnipost Desktop Companion</h4>
-                      <p className="text-[11px] text-slate-400 mb-6 max-w-sm leading-relaxed">
-                        For platforms with strict 2FA like X/Twitter, launch the Desktop Companion App. It will securely authenticate you in a native window and seamlessly sync your active session back to the automation engine.
+                      <h4 className="text-zinc-200 text-xs font-bold mb-1 font-mono uppercase tracking-wide">Desktop Companion Hook</h4>
+                      <p className="text-[10px] text-zinc-500 mb-5 max-w-xs leading-relaxed">
+                        Authorize securely via a local Puppeteer instance. This triggers local keychain validation to bypass anti-bot and 2FA.
                       </p>
                       
                       <a 
                         href={`omnipost://connect?platform=${connectPlatform}&token=${token}&host=${encodeURIComponent(window.location.origin)}`}
                         target="_blank"
-                        className="bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/30 px-6 py-2.5 rounded text-[11px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                        className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20 px-5 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-colors shadow"
                       >
-                        Launch Companion App
+                        Launch Local Handshake
                       </a>
-                      
-                      <div className="mt-6 pt-4 border-t border-white/5 w-full text-center">
-                        <p className="text-[9px] text-slate-500 mb-2 font-mono uppercase tracking-widest">Don't have the companion app?</p>
-                        <div className="flex flex-col gap-1.5 items-center justify-center">
-                          <a href="#" className="text-[10px] text-cyan-500/70 hover:text-cyan-400 underline decoration-cyan-500/30">Download Desktop (Mac & Windows)</a>
-                          <span className="text-[9px] text-slate-600 font-mono uppercase">Or compile our Expo mobile project:</span>
-                          <div className="flex gap-4">
-                            <span className="text-[10px] text-cyan-500/70 font-mono">/mobile-companion-expo</span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   )}
 
                   {connectMethod === "credentials" && (
-                    <>
+                    <div className="space-y-3 pt-1">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">
-                          {connectPlatform === "Bluesky" ? "Bluesky Handle (e.g. handle.bsky.social)" : "Username / Email"}
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                          {connectPlatform === "Bluesky" ? "Bluesky Handle" : "Login Email / Username"}
                         </label>
                         <input 
                           type="text" 
                           value={connectUsername}
                           onChange={(e) => setConnectUsername(e.target.value)}
-                          className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
-                          placeholder={connectPlatform === "Bluesky" ? "e.g. username.bsky.social" : ""}
+                          className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-3 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono"
+                          placeholder={connectPlatform === "Bluesky" ? "e.g. handle.bsky.social" : "admin@domain.com"}
                           required={connectMethod === "credentials"}
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">
-                          {connectPlatform === "Bluesky" ? "App Password" : "Password"}
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 block">
+                          {connectPlatform === "Bluesky" ? "App-Specific Password" : "Account Password"}
                         </label>
                         <input 
                           type="password" 
                           value={connectPassword}
                           onChange={(e) => setConnectPassword(e.target.value)}
-                          className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
-                          placeholder={connectPlatform === "Bluesky" ? "e.g. xxxx-xxxx-xxxx-xxxx" : ""}
+                          className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-3 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono"
+                          placeholder="••••••••••••"
                           required={connectMethod === "credentials"}
                         />
-                        {connectPlatform === "Bluesky" && (
-                          <p className="text-[9px] text-slate-500 mt-2 font-mono">
-                            Please generate an App Password in Bluesky (Settings &gt; App Passwords) rather than using your primary account password.
-                          </p>
-                        )}
                       </div>
                       {connectPlatform !== "Bluesky" && (
                         <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex justify-between">
-                            <span>2FA Setup Key (Authenticator Secret)</span>
-                            <span className="text-slate-600 normal-case font-normal">(Optional)</span>
+                          <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 flex justify-between">
+                            <span>2FA Secret Seed</span>
+                            <span className="text-zinc-600 font-normal lowercase tracking-wide">(Optional)</span>
                           </label>
                           <input 
                             type="text" 
                             value={connectTwoFactor}
                             onChange={(e) => setConnectTwoFactor(e.target.value)}
-                            className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono"
-                            placeholder="e.g. JBSWY3DPEHPK3PXP"
+                            className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-3 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono"
+                            placeholder="Base32 Setup Key"
                           />
-                          <p className="text-[9px] text-slate-500 mt-2 font-mono">
-                            To bypass 2FA prompts automatically, provide the Base32 setup key given when configuring your Authenticator App. The engine will generate the 6-digit codes on the fly.
-                          </p>
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
                   
                   {connectMethod === "session_cookie" && (
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Session Cookie (auth_token, sessionid, etc.)</label>
+                      <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Raw Session Cookie Payload</label>
                       <textarea 
                         value={connectSessionCookie}
                         onChange={(e) => setConnectSessionCookie(e.target.value)}
-                        className="w-full bg-black/40 border border-white/5 rounded p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 font-mono min-h-[100px] resize-none"
-                        placeholder="Paste your raw session cookie here to bypass login and 2FA completely."
+                        className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-3 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-mono min-h-[90px] resize-none leading-relaxed"
+                        placeholder="Paste auth_token or raw cookies to bypass login protocols entirely..."
                         required={connectMethod === "session_cookie"}
                       />
-                      <p className="text-[9px] text-slate-500 mt-2 font-mono">
-                        Extract this from your browser's Developer Tools (Application &gt; Cookies) while logged in. This completely bypasses the login flow and 2FA prompts.
-                      </p>
                     </div>
                   )}
                 </div>
-                <div className="mt-8 flex gap-3">
+
+                <div className="mt-6 flex gap-3 pt-1">
                   <button 
                     type="button" 
                     onClick={() => setShowConnectModal(false)}
-                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                    className="flex-1 py-2.5 bg-zinc-950 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-xl text-[9px] font-bold uppercase tracking-wider border border-zinc-850 transition-colors cursor-pointer"
                   >
-                    {connectMethod === "desktop_app" ? "Close" : "Cancel"}
+                    Cancel
                   </button>
                   
                   {connectMethod !== "desktop_app" && (
                     <button 
                       type="submit" 
                       disabled={connectLoading || (connectMethod === "credentials" ? (!connectUsername || !connectPassword) : !connectSessionCookie)}
-                      className="flex-1 py-3 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/50 rounded text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-50"
+                      className="flex-1 py-2.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 cursor-pointer"
                     >
-                      {connectLoading ? "Encrypting..." : "Secure & Connect"}
+                      {connectLoading ? "Encrypting..." : "Connect Node"}
                     </button>
                   )}
                 </div>
@@ -1082,30 +1681,33 @@ export default function App() {
           </div>
         )}
 
-        {/* Custom Disconnect Confirmation Modal */}
+        {/* Disconnect Account Modal */}
         {showDisconnectConfirm && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#0d1117] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                <h3 className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Disconnect Account</h3>
-                <button onClick={() => setShowDisconnectConfirm(null)} className="text-slate-500 hover:text-white">✕</button>
+          <div className="fixed inset-0 bg-[#040405]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+              <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent pointer-events-none" />
+              <div className="p-4 border-b border-zinc-800/80 flex justify-between items-center bg-zinc-950/40 relative z-10">
+                <h3 className="text-[10px] font-bold text-red-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Deauthorize Node
+                </h3>
               </div>
-              <div className="p-6">
-                <p className="text-sm text-slate-300 leading-relaxed mb-6">
-                  Are you sure you want to disconnect your <span className="text-cyan-400 font-bold uppercase">{showDisconnectConfirm}</span> account? This will revoke active session keys.
+              <div className="p-6 relative z-10">
+                <p className="text-xs text-zinc-300 leading-relaxed mb-6">
+                  Are you sure you want to disconnect your <span className="text-emerald-400 font-bold uppercase">{showDisconnectConfirm}</span> credentials? This will terminate scheduled background tasks.
                 </p>
                 <div className="flex gap-3">
                   <button 
                     type="button" 
                     onClick={() => setShowDisconnectConfirm(null)}
-                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                    className="flex-1 py-2.5 bg-zinc-950 hover:bg-zinc-850 text-zinc-400 hover:text-white border border-zinc-850 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     type="button" 
                     onClick={() => executeDisconnectAccount(showDisconnectConfirm)}
-                    className="flex-1 py-3 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/50 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                    className="flex-1 py-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/25 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
                   >
                     Disconnect
                   </button>
@@ -1115,40 +1717,37 @@ export default function App() {
           </div>
         )}
 
-        {/* Custom Alert/Error Modal */}
+        {/* Global Error/Alert Modal */}
         {errorMessage && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#0d1117] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-              <div className="p-4 border-b border-white/5 flex justify-between items-center bg-white/5">
-                <h3 className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Notification</h3>
-                <button onClick={() => setErrorMessage(null)} className="text-slate-500 hover:text-white">✕</button>
+          <div className="fixed inset-0 bg-[#040405]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+              <div className="p-4 border-b border-zinc-800/80 flex justify-between items-center bg-zinc-950/40 relative z-10">
+                <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">System Notice</h3>
+                <button onClick={() => setErrorMessage(null)} className="text-zinc-500 hover:text-white transition-colors cursor-pointer text-xs">✕</button>
               </div>
-              <div className="p-6">
-                <p className="text-sm text-slate-300 leading-relaxed mb-6">
+              <div className="p-6 relative z-10">
+                <p className="text-xs text-zinc-300 leading-relaxed mb-6 font-mono">
                   {errorMessage}
                 </p>
                 <button 
                   type="button" 
                   onClick={() => setErrorMessage(null)}
-                  className="w-full py-3 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/50 rounded text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-850 border border-zinc-850 text-zinc-300 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
                 >
-                  Confirm
+                  Confirm Ingestion
                 </button>
               </div>
             </div>
           </div>
         )}
 
-      </main>
-
-      {/* Status Bar */}
-      <footer className="h-8 bg-[#0a0c10] border-t border-white/5 flex items-center justify-between px-6 text-[10px] font-mono text-slate-600 shrink-0">
+      {/* Unified Status Footer */}
+      <footer className="h-7 bg-zinc-950 border-t border-zinc-800/60 flex items-center justify-between px-6 text-[8px] font-mono text-zinc-600 shrink-0 relative z-20">
         <div className="flex gap-4">
-          <span>NODE: WEST-US-1</span>
-          <span>LATENCY: 42MS</span>
-          <span className="hidden sm:inline">INSTANCES: ACTIVE</span>
+          <span className="flex items-center gap-1"><span className="w-1 h-1 bg-emerald-500 rounded-full" /> SECURE GATEWAY ENCRYPTED</span>
+          <span className="hidden sm:inline">PUPPETEER ENGINE V1.0.4-STABLE</span>
         </div>
-        <div>OMNIPOST ENGINE v1.0-STABLE</div>
+        <div>OMNIPOST HUB • ALL RIGHTS SECURED</div>
       </footer>
     </div>
   );

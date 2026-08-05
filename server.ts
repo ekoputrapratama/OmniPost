@@ -588,11 +588,11 @@ async function publishViaBrowser(
 
     const platLower = platform.toLowerCase();
     if (platLower === "twitter" || platLower === "x") {
-      await publishToTwitter(page, content, localMediaPaths);
+      await publishToTwitter(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "linkedin") {
       await publishToLinkedIn(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "facebook") {
-      await publishToFacebook(page, content, localMediaPaths);
+      await publishToFacebook(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "instagram") {
       if (localMediaPaths.length === 0) {
         throw new Error(
@@ -691,11 +691,48 @@ async function processPost(post: Post, credentialsList: any[]) {
       { merge: true },
     );
 
+    let hasFailure = false;
+    let failureMessage = "";
+
     for (const platform of post.platforms) {
       const cred = credentialsList.find(
         (c) => c.platform.toLowerCase() === platform.toLowerCase(),
       );
-      await publishViaBrowser(post.content, platform, cred, post.mediaUrls);
+      try {
+        await publishViaBrowser(post.content, platform, cred, post.mediaUrls);
+      } catch (platErr: any) {
+        console.error(`[Queue] Platform ${platform} failed during publishing:`, platErr);
+        hasFailure = true;
+        const msg = platErr.message || String(platErr);
+        failureMessage = msg;
+
+        // Check if it's an authentication or expired session failure
+        const isAuthFailure = 
+          msg.toLowerCase().includes("auth") || 
+          msg.toLowerCase().includes("cookie") || 
+          msg.toLowerCase().includes("expire") || 
+          msg.toLowerCase().includes("login") || 
+          msg.toLowerCase().includes("session") || 
+          msg.toLowerCase().includes("sign in");
+
+        if (isAuthFailure) {
+          const accountId = `${post.userId}_${platform.toLowerCase()}`;
+          try {
+            await setDoc(
+              doc(db, "connectedAccounts", accountId),
+              { expired: true, lastError: msg, expiredAt: new Date().toISOString() },
+              { merge: true }
+            );
+            console.log(`[Queue] Marked account ${accountId} as expired in Firestore due to auth failure.`);
+          } catch (dbErr) {
+            console.error(`[Queue] Failed to update connectedAccount ${accountId} status to expired:`, dbErr);
+          }
+        }
+      }
+    }
+
+    if (hasFailure) {
+      throw new Error(failureMessage || "One or more platforms failed to publish.");
     }
 
     // Update status to published
@@ -952,6 +989,7 @@ app.post("/api/accounts", verifyToken, async (req, res) => {
       platform,
       method,
       encryptedData,
+      expired: false,
       createdAt: new Date().toISOString(),
     };
 
