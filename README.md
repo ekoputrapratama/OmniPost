@@ -4,6 +4,10 @@
 
 OmniPost Automation Hub is a modern, high-performance, full-stack cross-platform social publishing dashboard and API. Designed to eliminate manual repetition across social platforms, OmniPost enables creators, marketers, and developers to draft content once, select target platforms, and seamlessly dispatch or schedule posts. It powers publishes through headless browser automation (Puppeteer) and handles reliable post delivery with robust state tracking.
 
+### Support the project
+
+<a href="https://www.buymeacoffee.com/ekoputraprm" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
+
 ---
 
 ## 🚀 Key Features
