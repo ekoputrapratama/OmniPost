@@ -101,6 +101,7 @@ Below is the current verification and implementation status of OmniPost Automati
   - [ ] **LinkedIn**: Field focus injection, multi-media uploading, and publish workflows.
   - [x] **Facebook**: Status message automation and media asset attachment.
   - [x] **Instagram**: Automation for photo/video posts and caption injection.
+  - [x] **TikTok**: Automatic homepage redirection, adaptive media-type selector (Videos vs Photos) depending on file mime-types/extensions, custom exit dialog resolution, instant "Post Now" check bypass, and post completion verification.
   - [x] **Bluesky**: Direct AT Protocol API integration for high-reliability publishing with custom handles support and sharp-powered automatic image scaling and compression.
   - [x] **Pinterest**: Automated Pin creation tool navigation, high-reliability file upload sequence, automated title/description injection, board selection dropdown, and publish dispatch flow.
 - [x] **Automated Background Scheduling Worker**: Server-side chronologically active cron loop (running every 10s) that pulls due posts, downloads any secure media files, decrypts credentials, and publishes them automatically.
