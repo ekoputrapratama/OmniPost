@@ -114,6 +114,8 @@ function startPlatformLogin(platform) {
     loginUrl = 'https://www.linkedin.com/login';
   } else if (platform.toLowerCase() === 'pinterest') {
     loginUrl = 'https://www.pinterest.com/login/';
+  } else if (platform.toLowerCase() === 'tiktok') {
+    loginUrl = 'https://www.tiktok.com/login';
   } else {
     loginUrl = 'https://google.com'; // fallback
   }
@@ -132,8 +134,9 @@ function startPlatformLogin(platform) {
       const isLinkedInHome = url.includes('linkedin.com/feed');
       const pinterestMatches = urlObj.host.match(/^[a-z]{2}\.pinterest\.com/);
       const isPinterestHome = (urlObj.host.includes('pinterest') || (pinterestMatches && pinterestMatches.length > 0)) && (urlObj.pathname === '/' || urlObj.pathname === '/feed/' || urlObj.pathname.includes('/homefeed') || urlObj.pathname.startsWith('/today'));
+      const isTikTokHome = urlObj.host.includes('tiktok.com') && (urlObj.pathname === '/' || urlObj.pathname.startsWith('/foryou') || urlObj.pathname.startsWith('/explore') || urlObj.pathname.startsWith('/following') || urlObj.pathname.startsWith('/creator-center') || urlObj.host.includes('creator.tiktok.com'));
 
-      if (isTwitterHome || isInstagramHome || isFacebookHome || isLinkedInHome || isPinterestHome) {
+      if (isTwitterHome || isInstagramHome || isFacebookHome || isLinkedInHome || isPinterestHome || isTikTokHome) {
         isAuthenticating = false;
         
         // Get cookies
@@ -154,6 +157,8 @@ function startPlatformLogin(platform) {
               return c.domain.includes('linkedin.com');
             } else if (platLower === 'pinterest') {
               return c.domain.includes('pinterest');
+            } else if (platLower === 'tiktok') {
+              return c.domain.includes('tiktok.com');
             }
             return false;
           });
