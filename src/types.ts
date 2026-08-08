@@ -4,6 +4,7 @@ export interface Post {
   content: string;
   platforms: string[];
   mediaUrls?: string[];
+  thumbnails?: string[];
   status: "pending" | "publishing" | "published" | "failed" | "scheduled";
   scheduledFor?: string;
   createdAt: string;

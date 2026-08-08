@@ -25,6 +25,7 @@ import { publishToFacebook } from "./server/automation/facebook";
 import { publishToInstagram } from "./server/automation/instagram";
 import { publishToBluesky } from "./server/automation/bluesky";
 import { publishToPinterest } from "./server/automation/pinterest";
+import { publishToTikTok } from "./server/automation/tiktok";
 import firebaseConfig from "./server/firebaseConfig";
 
 const app = express();
@@ -250,35 +251,67 @@ async function publishViaBrowser(
       for (let i = 0; i < mediaUrls.length; i++) {
         const url = mediaUrls[i];
         try {
-          const tempPath = path.join(
-            os.tmpdir(),
-            `upload_${Date.now()}_${i}.jpg`,
-          );
+          let ext = ".jpg"; // default fallback
+          let buffer: Buffer | null = null;
+
           if (url.startsWith("data:")) {
             const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
             if (matches && matches.length === 3) {
-              const buffer = Buffer.from(matches[2], "base64");
-              fs.writeFileSync(tempPath, buffer);
-              localMediaPaths.push(tempPath);
-              console.log(
-                `[Automation] Saved base64 media to local temp path: ${tempPath}`,
-              );
+              const mimeType = matches[1].toLowerCase();
+              buffer = Buffer.from(matches[2], "base64");
+              
+              if (mimeType.includes("video/mp4")) ext = ".mp4";
+              else if (mimeType.includes("video/quicktime") || mimeType.includes("video/mov")) ext = ".mov";
+              else if (mimeType.includes("video/webm")) ext = ".webm";
+              else if (mimeType.includes("image/png")) ext = ".png";
+              else if (mimeType.includes("image/gif")) ext = ".gif";
+              else if (mimeType.includes("image/webp")) ext = ".webp";
+              else if (mimeType.includes("image/")) ext = ".jpg";
+              else if (mimeType.includes("video/")) ext = ".mp4";
             }
           } else if (url.startsWith("http")) {
             const res = await globalThis.fetch(url);
             if (res.ok) {
+              const contentType = (res.headers.get("content-type") || "").toLowerCase();
               const arrayBuffer = await res.arrayBuffer();
-              const buffer = Buffer.from(arrayBuffer);
-              fs.writeFileSync(tempPath, buffer);
-              localMediaPaths.push(tempPath);
-              console.log(
-                `[Automation] Downloaded HTTP media to local temp path: ${tempPath}`,
-              );
+              buffer = Buffer.from(arrayBuffer);
+
+              if (contentType.includes("video/mp4")) ext = ".mp4";
+              else if (contentType.includes("video/quicktime") || contentType.includes("video/mov")) ext = ".mov";
+              else if (contentType.includes("video/webm")) ext = ".webm";
+              else if (contentType.includes("image/png")) ext = ".png";
+              else if (contentType.includes("image/gif")) ext = ".gif";
+              else if (contentType.includes("image/webp")) ext = ".webp";
+              else if (contentType.includes("image/")) ext = ".jpg";
+              else if (contentType.includes("video/")) ext = ".mp4";
+              else {
+                // check URL file extension
+                try {
+                  const urlObj = new URL(url);
+                  const urlPath = urlObj.pathname;
+                  const match = urlPath.match(/\.(mp4|mov|webm|png|jpg|jpeg|gif|webp)$/i);
+                  if (match) {
+                    ext = match[0].toLowerCase();
+                  }
+                } catch (e) {}
+              }
             } else {
               console.error(
                 `[Automation] Failed to download media URL: ${url}, status: ${res.status}`,
               );
             }
+          }
+
+          if (buffer) {
+            const tempPath = path.join(
+              os.tmpdir(),
+              `upload_${Date.now()}_${i}${ext}`,
+            );
+            fs.writeFileSync(tempPath, buffer);
+            localMediaPaths.push(tempPath);
+            console.log(
+              `[Automation] Saved media with dynamic extension '${ext}' to local temp path: ${tempPath}`,
+            );
           }
         } catch (mediaErr) {
           console.error(
@@ -360,6 +393,9 @@ async function publishViaBrowser(
       } else if (platLower === "pinterest") {
         platformUrl = "https://www.pinterest.com";
         platformDomain = ".pinterest.com";
+      } else if (platLower === "tiktok") {
+        platformUrl = "https://www.tiktok.com";
+        platformDomain = ".tiktok.com";
       }
 
       let parsedCookies: any[] = [];
@@ -445,6 +481,8 @@ async function publishViaBrowser(
             return false;
           if (platLower === "pinterest" && !dom.includes("pinterest"))
             return false;
+          if (platLower === "tiktok" && !dom.includes("tiktok.com"))
+            return false;
         }
 
         // 2. Filter out keys that exclusively belong to other platforms (anti-cross-contamination)
@@ -478,6 +516,15 @@ async function publishViaBrowser(
             return false; // LinkedIn
         } else if (platLower === "pinterest") {
           if (["sessionid", "ds_user_id", "ig_did"].includes(nameLower))
+            return false; // Instagram
+          if (["auth_token", "ct0", "twid"].includes(nameLower)) return false; // Twitter/X
+          if (
+            ["li_at", "bcookie", "bscookie", "jsessionid"].includes(nameLower)
+          )
+            return false; // LinkedIn
+          if (["c_user", "xs"].includes(nameLower)) return false; // Facebook
+        } else if (platLower === "tiktok") {
+          if (["ds_user_id", "ig_did"].includes(nameLower))
             return false; // Instagram
           if (["auth_token", "ct0", "twid"].includes(nameLower)) return false; // Twitter/X
           if (
@@ -541,11 +588,11 @@ async function publishViaBrowser(
 
     const platLower = platform.toLowerCase();
     if (platLower === "twitter" || platLower === "x") {
-      await publishToTwitter(page, content, localMediaPaths);
+      await publishToTwitter(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "linkedin") {
       await publishToLinkedIn(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "facebook") {
-      await publishToFacebook(page, content, localMediaPaths);
+      await publishToFacebook(page, content, localMediaPaths, mediaDir);
     } else if (platLower === "instagram") {
       if (localMediaPaths.length === 0) {
         throw new Error(
@@ -560,6 +607,13 @@ async function publishViaBrowser(
         );
       }
       await publishToPinterest(page, content, localMediaPaths, mediaDir);
+    } else if (platLower === "tiktok") {
+      if (localMediaPaths.length === 0) {
+        throw new Error(
+          "TikTok is a video-centric platform and strictly requires at least one video (or image) file to upload. Please attach media and try again.",
+        );
+      }
+      await publishToTikTok(page, content, localMediaPaths, mediaDir);
     } else {
       console.log(
         `[Automation] Unknown platform ${platform}. Navigating to backup portal...`,
@@ -637,11 +691,48 @@ async function processPost(post: Post, credentialsList: any[]) {
       { merge: true },
     );
 
+    let hasFailure = false;
+    let failureMessage = "";
+
     for (const platform of post.platforms) {
       const cred = credentialsList.find(
         (c) => c.platform.toLowerCase() === platform.toLowerCase(),
       );
-      await publishViaBrowser(post.content, platform, cred, post.mediaUrls);
+      try {
+        await publishViaBrowser(post.content, platform, cred, post.mediaUrls);
+      } catch (platErr: any) {
+        console.error(`[Queue] Platform ${platform} failed during publishing:`, platErr);
+        hasFailure = true;
+        const msg = platErr.message || String(platErr);
+        failureMessage = msg;
+
+        // Check if it's an authentication or expired session failure
+        const isAuthFailure = 
+          msg.toLowerCase().includes("auth") || 
+          msg.toLowerCase().includes("cookie") || 
+          msg.toLowerCase().includes("expire") || 
+          msg.toLowerCase().includes("login") || 
+          msg.toLowerCase().includes("session") || 
+          msg.toLowerCase().includes("sign in");
+
+        if (isAuthFailure) {
+          const accountId = `${post.userId}_${platform.toLowerCase()}`;
+          try {
+            await setDoc(
+              doc(db, "connectedAccounts", accountId),
+              { expired: true, lastError: msg, expiredAt: new Date().toISOString() },
+              { merge: true }
+            );
+            console.log(`[Queue] Marked account ${accountId} as expired in Firestore due to auth failure.`);
+          } catch (dbErr) {
+            console.error(`[Queue] Failed to update connectedAccount ${accountId} status to expired:`, dbErr);
+          }
+        }
+      }
+    }
+
+    if (hasFailure) {
+      throw new Error(failureMessage || "One or more platforms failed to publish.");
     }
 
     // Update status to published
@@ -898,6 +989,7 @@ app.post("/api/accounts", verifyToken, async (req, res) => {
       platform,
       method,
       encryptedData,
+      expired: false,
       createdAt: new Date().toISOString(),
     };
 
