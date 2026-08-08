@@ -57,7 +57,7 @@ if (!gotTheLock) {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 800,
-    height: 700,
+    height: 905,
     title: 'Omnipost Companion',
     webPreferences: {
       nodeIntegration: false,

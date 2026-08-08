@@ -12,8 +12,9 @@
     "productName": "OmniPost Desktop Companion",
     "win": {
       "target": [
-        "portable"
-      ]
+        "portable", "nsis"
+      ],
+      "icon": "assets/icons/OmniPost.png"
     },
     "portable": {
       "artifactName": "${productName}-Portable.${ext}"

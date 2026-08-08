@@ -34,7 +34,8 @@ import {
   Video, 
   Info, 
   X, 
-  ChevronRight
+  ChevronRight,
+  Download
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { 
@@ -1587,13 +1588,32 @@ console.log(await res.json());`;
                         Authorize securely via a local Puppeteer instance. This triggers local keychain validation to bypass anti-bot and 2FA.
                       </p>
                       
-                      <a 
-                        href={`omnipost://connect?platform=${connectPlatform}&token=${token}&host=${encodeURIComponent(window.location.origin)}`}
-                        target="_blank"
-                        className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20 px-5 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-colors shadow"
-                      >
-                        Launch Local Handshake
-                      </a>
+                      <div className="flex flex-col gap-2 w-full max-w-[240px]">
+                        <a 
+                          href={`omnipost://connect?platform=${connectPlatform}&token=${token}&host=${encodeURIComponent(window.location.origin)}`}
+                          target="_blank"
+                          className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20 py-2.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-colors shadow flex items-center justify-center gap-1.5"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          Launch Local Handshake
+                        </a>
+
+                        <div className="w-full flex items-center justify-center gap-2 py-1">
+                          <span className="h-px bg-zinc-800/60 flex-1" />
+                          <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest font-mono">or</span>
+                          <span className="h-px bg-zinc-800/60 flex-1" />
+                        </div>
+
+                        <a 
+                          href="https://github.com/ekoputrapratama/OmniPost/releases/tag/v1.0.0"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-zinc-950/40 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-950/80 border border-zinc-850 hover:border-zinc-750 py-2.5 rounded-xl text-[9px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Download Companion App
+                        </a>
+                      </div>
                     </div>
                   )}
 
