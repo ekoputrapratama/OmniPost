@@ -7,6 +7,18 @@
     "start": "electron .",
     "build": "electron-builder build --publish never"
   },
+  "build": {
+    "appId": "com.mixaline.omnipost",
+    "productName": "OmniPost Desktop Companion",
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable.${ext}"
+    }
+  },
   "dependencies": {
     "axios": "^1.6.0"
   },
