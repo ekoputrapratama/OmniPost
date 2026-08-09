@@ -225,6 +225,20 @@ app.whenReady().then(() => {
   ipcMain.on('start-login', (event, platform) => {
     startPlatformLogin(platform);
   });
+  
+  // Handle COLD starts on Windows/Linux
+  if (process.platform !== 'darwin') {
+    const url = process.argv.find(arg => arg.startsWith('omnipost://'));
+    if (url) {
+      console.log("handle deeplink on cold boot");
+      handleDeepLink(url);
+    }
+  } 
+  // Handle COLD starts on macOS (if event fired before ready)
+  else if (deepLinkUrl) {
+    handleDeepLink(deepLinkUrl);
+    deepLinkUrl = null;
+  }
 });
 
 // Deep link handler for macOS

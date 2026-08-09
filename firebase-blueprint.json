@@ -48,6 +48,21 @@
           "format": "date-time",
           "description": "When the connection was established",
           "maxLength": 100
+        },
+        "expired": {
+          "type": "boolean",
+          "description": "Whether the session/cookies have expired"
+        },
+        "lastError": {
+          "type": "string",
+          "description": "Last automation error message",
+          "maxLength": 1000
+        },
+        "expiredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the session was marked as expired",
+          "maxLength": 100
         }
       },
       "required": ["userId", "platform", "method", "encryptedData", "createdAt"]

@@ -45,7 +45,7 @@ class _MainScreenState extends State<MainScreen> {
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
 
-  String _serverUrl = 'https://omnipost.example.com';
+  String _serverUrl = 'https://omnipost-hub.ai.studio';
   bool _isEditingServer = false;
   final TextEditingController _serverController = TextEditingController();
 
@@ -116,11 +116,11 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     // 2. Handle deep link when the app is cold-booted
-    // _appLinks.getInitialLink().then((uri) {
-    //   if (uri != null) {
-    //     _handleDeepLink(uri);
-    //   }
-    // });
+    _appLinks.getInitialAppLink().then((uri) {
+      if (uri != null) {
+        _handleDeepLink(uri);
+      }
+    });
   }
 
   void _handleDeepLink(Uri uri) {
