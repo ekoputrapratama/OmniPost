@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Post } from "./types";
 import { 
   Terminal, 
@@ -61,6 +62,8 @@ import {
 } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import AnalyticsPanel from "./components/AnalyticsPanel";
+import LandingPage from "./components/LandingPage";
+import { LoginPage } from "./components/LoginPage";
 
 const PLATFORMS = ["Twitter", "Facebook", "Instagram", "Bluesky", "Pinterest", "TikTok"];
 
@@ -818,64 +821,12 @@ console.log(await res.json());`;
     );
   }
 
-  if (!user) {
-    return (
-      <div className="h-screen bg-[#09090b] flex flex-col items-center justify-center text-zinc-300 font-sans selection:bg-emerald-500/30 relative overflow-hidden">
-        {/* Grid Overlays */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-[#09090b] to-[#040405] opacity-90 pointer-events-none" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808004_1px,transparent_1px),linear-gradient(to_bottom,#80808004_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
-        
-        <div className="w-full max-w-md p-8 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl backdrop-blur-xl shadow-2xl relative z-10 flex flex-col items-center">
-          <div className="w-14 h-14 bg-zinc-950 border border-zinc-800 rounded-xl shadow-inner flex items-center justify-center relative overflow-hidden mb-6">
-            <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 to-transparent" />
-            <Bot className="w-7 h-7 text-emerald-400" />
-          </div>
-          
-          <div className="text-center mb-8">
-            <h1 className="text-xl font-bold tracking-tight text-white uppercase font-mono">OmniPost</h1>
-            <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-[9px] font-mono font-bold text-emerald-400 uppercase tracking-widest">
-              v1.0.4 • ACTIVE
-            </span>
-            <p className="text-xs text-zinc-400 mt-4 leading-relaxed max-w-xs">
-              AI Browser Automation Gateway. Cross-publish to major social networks instantly via headless Puppeteer browser instances.
-            </p>
-          </div>
-
-          <div className="w-full space-y-3 mb-8 text-left">
-            <div className="flex items-center gap-3 p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/5 flex items-center justify-center text-emerald-400"><Cpu className="w-3.5 h-3.5" /></div>
-              <div>
-                <h4 className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider">Browser Automation</h4>
-                <p className="text-[10px] text-zinc-500 leading-none mt-0.5">Automated puppeteer page instances</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-zinc-950/40 border border-zinc-850 rounded-xl">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500/5 flex items-center justify-center text-emerald-400"><Activity className="w-3.5 h-3.5" /></div>
-              <div>
-                <h4 className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider">Live Trace Streams</h4>
-                <p className="text-[10px] text-zinc-500 leading-none mt-0.5">Realtime terminal execution logs</p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleLogin}
-            className="w-full bg-zinc-100 text-zinc-950 hover:bg-white border border-white/20 rounded-xl py-3 text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2.5 active:scale-95 shadow-md cursor-pointer"
-          >
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
-            Sign in with Google
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={handleLogin} />} />
+      <Route path="/dashboard" element={
+        !user ? <Navigate to="/login" replace /> : (
     <div className="h-screen bg-[#09090b] text-zinc-300 font-sans selection:bg-emerald-500/30 flex flex-col overflow-hidden relative">
       {/* Dynamic Cyber Dot Overlay and subtle top glow */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900/40 via-[#09090b] to-[#040405] opacity-80 pointer-events-none" />
@@ -1770,6 +1721,9 @@ console.log(await res.json());`;
         <div>OMNIPOST HUB • ALL RIGHTS SECURED</div>
       </footer>
     </div>
+    )} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
